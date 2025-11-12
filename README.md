@@ -4,9 +4,12 @@ This directory contains a comprehensive survey of 16 popular Raft implementation
 
 ## Quick Links
 
+- **[📑 DOCUMENT INDEX](INDEX.md)** - Complete document navigation and reading paths
 - **[📊 SURVEY REPORT](SURVEY-REPORT.md)** - Comprehensive analysis of all 16 implementations
 - [hashicorp/raft Analysis](hashicorp-raft-analysis.md) - Detailed analysis of HashiCorp's implementation
 - [sofa-jraft Analysis](sofa-jraft-analysis.md) - Detailed analysis of SOFAJRaft's implementation
+- [Blog Article (EN)](raft-rs-replication-bug.md) - Technical article explaining the bug
+- [Blog Article (中文)](raft-rs-replication-bug-zh.md) - Technical article in Chinese
 
 ## The Bug
 
@@ -61,22 +64,52 @@ if (server == NULL) {
 }
 ```
 
+## Documents
+
+### Main Survey Documents
+- **[SURVEY-REPORT.md](SURVEY-REPORT.md)** - Comprehensive analysis of 16 implementations with detailed findings
+- **[README.md](README.md)** - This overview document
+
+### Individual Implementation Analyses
+- [hashicorp-raft-analysis.md](hashicorp-raft-analysis.md) - Detailed analysis of HashiCorp's Raft (VULNERABLE)
+- [sofa-jraft-analysis.md](sofa-jraft-analysis.md) - Detailed analysis of SOFAJRaft (PROTECTED)
+
+### Technical Articles
+- [raft-rs-replication-bug.md](raft-rs-replication-bug.md) - Technical article explaining the bug (English)
+- [raft-rs-replication-bug-zh.md](raft-rs-replication-bug-zh.md) - Technical article explaining the bug (Chinese)
+
+### Research Documents
+- [raft-rs-replication-session-issue.md](raft-rs-replication-session-issue.md) - Original research document (Chinese, mentions OpenRaft)
+- [repo-list.md](repo-list.md) - List of Raft implementations considered
+
 ## Repository Structure
 
 ```
 rejoin-bug-survey/
-├── README.md                       # This file
-├── SURVEY-REPORT.md               # Comprehensive survey report
-├── hashicorp-raft-analysis.md     # Individual analysis
-├── sofa-jraft-analysis.md         # Individual analysis
-├── hashicorp-raft/                # Cloned source code
-├── dragonboat/                    # Cloned source code
-├── sofa-jraft/                    # Cloned source code
-├── raft-rs/                       # Cloned source code
-├── willemt-raft/                  # Cloned source code
-├── canonical-raft/                # Cloned source code
-├── etcd-raft/                     # Cloned source code
-└── redisraft/                     # Cloned source code
+├── README.md                          # This overview
+├── SURVEY-REPORT.md                   # Comprehensive survey (16 implementations)
+├── hashicorp-raft-analysis.md         # HashiCorp Raft analysis
+├── sofa-jraft-analysis.md             # SOFAJRaft analysis
+├── raft-rs-replication-bug.md         # Blog article (English)
+├── raft-rs-replication-bug-zh.md      # Blog article (Chinese)
+├── raft-rs-replication-session-issue.md # Original research
+├── repo-list.md                       # Implementation list
+├── hashicorp-raft/                    # Source code
+├── dragonboat/                        # Source code
+├── sofa-jraft/                        # Source code
+├── raft-rs/                           # Source code
+├── braft/                             # Source code
+├── apache-ratis/                      # Source code
+├── nuraft/                            # Source code
+├── raft-java/                         # Source code
+├── logcabin/                          # Source code
+├── eliben-raft/                       # Source code
+├── rabbitmq-ra/                       # Source code
+├── pysyncobj/                         # Source code
+├── willemt-raft/                      # Source code
+├── canonical-raft/                    # Source code
+├── etcd-raft/                         # Source code
+└── redisraft/                         # Source code
 ```
 
 ## Methodology
