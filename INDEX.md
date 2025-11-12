@@ -3,9 +3,20 @@
 ## 🎯 Quick Start
 
 **New to this research?** Start here:
-1. Read [README.md](README.md) for an overview
-2. Check the [SURVEY-REPORT.md](SURVEY-REPORT.md) for comprehensive findings
-3. Read the technical article: [English](raft-rs-replication-bug.md) | [中文](raft-rs-replication-bug-zh.md)
+1. Clone the repositories: `./clone-repos.sh` (optional, for source code access)
+2. Read [README.md](README.md) for an overview
+3. Check the [SURVEY-REPORT.md](SURVEY-REPORT.md) for comprehensive findings
+4. Read the technical article: [English](raft-rs-replication-bug.md) | [中文](raft-rs-replication-bug-zh.md)
+
+### Clone Repositories
+
+```bash
+# Clone all 16 Raft implementations (shallow clone, ~500MB)
+./clone-repos.sh
+
+# Or full clone with complete history (~2GB)
+./clone-repos.sh --full
+```
 
 ## 📚 Documents by Purpose
 
