@@ -50,20 +50,12 @@ When a node is removed and re-added to a cluster within the same term, delayed A
 To clone all 16 Raft implementation repositories for local analysis:
 
 ```bash
-# Quick clone (shallow, recommended for most users)
 ./clone-repos.sh
-
-# Full clone with complete git history (larger download)
-./clone-repos.sh --full
 ```
 
-The script will:
-- Clone all 16 repositories into appropriately named subdirectories
-- Skip repositories that are already cloned
-- Show progress and summary statistics
-- Handle errors gracefully
+The script clones all 16 repositories (shallow clone with `--depth 1`) and skips any that already exist.
 
-**Disk space required**: ~500MB (shallow) / ~2GB (full)
+**Disk space required**: ~500MB
 
 **Note**: The cloned repositories are excluded from git tracking via `.gitignore`. Other users can re-clone them using the script.
 

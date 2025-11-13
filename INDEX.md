@@ -11,11 +11,8 @@
 ### Clone Repositories
 
 ```bash
-# Clone all 16 Raft implementations (shallow clone, ~500MB)
+# Clone all 16 Raft implementations (~500MB)
 ./clone-repos.sh
-
-# Or full clone with complete history (~2GB)
-./clone-repos.sh --full
 ```
 
 ## 📚 Documents by Purpose
