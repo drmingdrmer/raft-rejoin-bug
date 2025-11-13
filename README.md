@@ -45,19 +45,13 @@ When a node is removed and re-added to a cluster within the same term, delayed A
 
 ## Getting Started
 
-### Clone All Repositories
-
-To clone all 16 Raft implementation repositories for local analysis:
+Clone all 16 implementations for local analysis:
 
 ```bash
 ./clone-repos.sh
 ```
 
-The script clones all 16 repositories (shallow clone with `--depth 1`) and skips any that already exist.
-
-**Disk space required**: ~500MB
-
-**Note**: The cloned repositories are excluded from git tracking via `.gitignore`. Other users can re-clone them using the script.
+Shallow clone (~500MB), skips existing repos. Cloned repos are gitignored.
 
 ## Protection Mechanisms
 
@@ -80,54 +74,6 @@ if (server == NULL) {
 }
 ```
 
-## Documents
-
-### Main Survey Documents
-- **[SURVEY-REPORT.md](SURVEY-REPORT.md)** - Comprehensive analysis of 16 implementations with detailed findings
-- **[README.md](README.md)** - This overview document
-
-### Individual Implementation Analyses
-- [hashicorp-raft-analysis.md](hashicorp-raft-analysis.md) - Detailed analysis of HashiCorp's Raft (VULNERABLE)
-- [sofa-jraft-analysis.md](sofa-jraft-analysis.md) - Detailed analysis of SOFAJRaft (PROTECTED)
-
-### Technical Articles
-- [raft-rs-replication-bug.md](raft-rs-replication-bug.md) - Technical article explaining the bug (English)
-- [raft-rs-replication-bug-zh.md](raft-rs-replication-bug-zh.md) - Technical article explaining the bug (Chinese)
-
-### Research Documents
-- [raft-rs-replication-session-issue.md](raft-rs-replication-session-issue.md) - Original research document (Chinese, mentions OpenRaft)
-- [repo-list.md](repo-list.md) - List of Raft implementations considered
-
-## Repository Structure
-
-```
-rejoin-bug-survey/
-├── README.md                          # This overview
-├── SURVEY-REPORT.md                   # Comprehensive survey (16 implementations)
-├── hashicorp-raft-analysis.md         # HashiCorp Raft analysis
-├── sofa-jraft-analysis.md             # SOFAJRaft analysis
-├── raft-rs-replication-bug.md         # Blog article (English)
-├── raft-rs-replication-bug-zh.md      # Blog article (Chinese)
-├── raft-rs-replication-session-issue.md # Original research
-├── repo-list.md                       # Implementation list
-├── hashicorp-raft/                    # Source code
-├── dragonboat/                        # Source code
-├── sofa-jraft/                        # Source code
-├── raft-rs/                           # Source code
-├── braft/                             # Source code
-├── apache-ratis/                      # Source code
-├── nuraft/                            # Source code
-├── raft-java/                         # Source code
-├── logcabin/                          # Source code
-├── eliben-raft/                       # Source code
-├── rabbitmq-ra/                       # Source code
-├── pysyncobj/                         # Source code
-├── willemt-raft/                      # Source code
-├── canonical-raft/                    # Source code
-├── etcd-raft/                         # Source code
-└── redisraft/                         # Source code
-```
-
 ## Methodology
 
 For each implementation, we analyzed:
@@ -148,13 +94,6 @@ Implementations should adopt one of these solutions:
 
 See the [SURVEY REPORT](SURVEY-REPORT.md) for detailed solutions and code examples.
 
-## Related Articles
-
-- `raft-rs-replication-bug.md` - Technical article analyzing the bug (English)
-- `raft-rs-replication-bug-zh.md` - Technical article analyzing the bug (Chinese)
-
 ---
 
-**Date**: November 2025
-**Scope**: 8 Raft implementations with >700 GitHub stars
-**Finding**: 75% of popular implementations are vulnerable
+**Survey**: 16 implementations, 60K+ stars, 67% vulnerable (November 2025)

@@ -2,55 +2,20 @@
 
 ## 🎯 Quick Start
 
-**New to this research?** Start here:
-1. Clone the repositories: `./clone-repos.sh` (optional, for source code access)
-2. Read [README.md](README.md) for an overview
-3. Check the [SURVEY-REPORT.md](SURVEY-REPORT.md) for comprehensive findings
-4. Read the technical article: [English](raft-rs-replication-bug.md) | [中文](raft-rs-replication-bug-zh.md)
+1. Read [README.md](README.md) for an overview
+2. Read the technical article: [English](raft-rs-replication-bug.md) | [中文](raft-rs-replication-bug-zh.md)
+3. Check [SURVEY-REPORT.md](SURVEY-REPORT.md) for comprehensive findings
+4. Clone source code: `./clone-repos.sh` (optional)
 
-### Clone Repositories
+## 📚 Main Documents
 
-```bash
-# Clone all 16 Raft implementations (~500MB)
-./clone-repos.sh
-```
-
-## 📚 Documents by Purpose
-
-### For Understanding the Bug
-
-**Best starting point**: [raft-rs-replication-bug.md](raft-rs-replication-bug.md)
-- Clear explanation of the bug mechanism
-- Step-by-step reproduction scenario
-- Impact analysis and solutions
-- Available in: [English](raft-rs-replication-bug.md) | [中文](raft-rs-replication-bug-zh.md)
-
-**Original research**: [raft-rs-replication-session-issue.md](raft-rs-replication-session-issue.md)
-- Chinese document comparing OpenRaft and raft-rs approaches
-- Historical context and discovery process
-
-### For Implementation Analysis
-
-**Comprehensive survey**: [SURVEY-REPORT.md](SURVEY-REPORT.md)
-- Analysis of 16 Raft implementations
-- 10 vulnerable, 5 protected, 1 N/A
-- Detailed code references and protection mechanisms
-- Language/ecosystem vulnerability analysis
-
-**Individual analyses**:
-- [hashicorp-raft-analysis.md](hashicorp-raft-analysis.md) - Most popular Go implementation (VULNERABLE)
-- [sofa-jraft-analysis.md](sofa-jraft-analysis.md) - Java implementation with version counter (PROTECTED)
-
-### For Operators and Developers
-
-**README**: [README.md](README.md)
-- Quick reference table of all implementations
-- Protection mechanism examples
-- Recommendations for operators
-
-**Implementation list**: [repo-list.md](repo-list.md)
-- Complete list of Raft implementations surveyed
-- Star counts and language information
+- [README.md](README.md) - Overview and results summary
+- [SURVEY-REPORT.md](SURVEY-REPORT.md) - Comprehensive analysis of 16 implementations
+- [raft-rs-replication-bug.md](raft-rs-replication-bug.md) - Technical article (English)
+- [raft-rs-replication-bug-zh.md](raft-rs-replication-bug-zh.md) - Technical article (Chinese)
+- [hashicorp-raft-analysis.md](hashicorp-raft-analysis.md) - Detailed analysis (VULNERABLE)
+- [sofa-jraft-analysis.md](sofa-jraft-analysis.md) - Detailed analysis (PROTECTED)
+- [raft-rs-replication-session-issue.md](raft-rs-replication-session-issue.md) - Original research (Chinese)
 
 ## 🔍 Quick Reference
 
@@ -83,51 +48,13 @@
 
 ## 📖 Reading Paths
 
-### Path 1: Quick Overview (15 minutes)
-1. [README.md](README.md) - Overview and results table
-2. [raft-rs-replication-bug.md](raft-rs-replication-bug.md) - Bug explanation
-3. [SURVEY-REPORT.md](SURVEY-REPORT.md) - Executive summary section
+**Quick Overview** (15 min): README.md → raft-rs-replication-bug.md
 
-### Path 2: Deep Technical (1-2 hours)
-1. [raft-rs-replication-bug.md](raft-rs-replication-bug.md) - Understand the bug
-2. [SURVEY-REPORT.md](SURVEY-REPORT.md) - All implementation analyses
-3. [hashicorp-raft-analysis.md](hashicorp-raft-analysis.md) - Example vulnerable impl
-4. [sofa-jraft-analysis.md](sofa-jraft-analysis.md) - Example protected impl
+**Comprehensive** (1-2 hours): raft-rs-replication-bug.md → SURVEY-REPORT.md → individual analyses
 
-### Path 3: Implementation Review (30 minutes)
-1. [SURVEY-REPORT.md](SURVEY-REPORT.md) - Protection mechanisms section
-2. Find your implementation in the survey
-3. Check the code references for your language
+**Maintainers**: Find your implementation in SURVEY-REPORT.md → check protection mechanisms
 
-### Path 4: Research Context (Chinese readers)
-1. [raft-rs-replication-session-issue.md](raft-rs-replication-session-issue.md) - Original research
-2. [raft-rs-replication-bug-zh.md](raft-rs-replication-bug-zh.md) - Technical article
-3. [SURVEY-REPORT.md](SURVEY-REPORT.md) - Survey results
-
-## 🔗 External Resources
-
-### Source Code Repositories
-All implementations are cloned in subdirectories:
-- `hashicorp-raft/`, `dragonboat/`, `raft-rs/`, `sofa-jraft/`
-- `braft/`, `apache-ratis/`, `nuraft/`, `raft-java/`
-- `logcabin/`, `canonical-raft/`, `etcd-raft/`, `redisraft/`
-- `eliben-raft/`, `rabbitmq-ra/`, `pysyncobj/`, `willemt-raft/`
-
-### Related OpenRaft Documentation
-- OpenRaft's replication session ID design (external)
-- Membership change protocol (external)
-
-## 📝 Document Metadata
-
-| Document | Language | Length | Last Updated | Purpose |
-|----------|----------|--------|--------------|---------|
-| README.md | EN | ~150 lines | 2025-11-12 | Overview |
-| SURVEY-REPORT.md | EN | ~537 lines | 2025-11-12 | Comprehensive survey |
-| raft-rs-replication-bug.md | EN | ~250 lines | 2025-11-12 | Technical article |
-| raft-rs-replication-bug-zh.md | ZH | ~250 lines | 2025-11-12 | Technical article (Chinese) |
-| hashicorp-raft-analysis.md | EN | ~250 lines | 2025-11-12 | Individual analysis |
-| sofa-jraft-analysis.md | EN | ~150 lines | 2025-11-12 | Individual analysis |
-| raft-rs-replication-session-issue.md | ZH | ~360 lines | 2025-11-07 | Original research |
+**Chinese Readers**: raft-rs-replication-bug-zh.md → SURVEY-REPORT.md
 
 ## 🎓 Key Takeaways
 
@@ -139,22 +66,12 @@ All implementations are cloned in subdirectories:
 
 ## 💡 For Maintainers
 
-If you maintain a Raft implementation:
-1. Check if you're in the [survey](SURVEY-REPORT.md)
-2. Review the [protection mechanisms](SURVEY-REPORT.md#protection-mechanisms-found)
-3. Consider implementing a [version counter](SURVEY-REPORT.md#solution-1-version-counter-recommended-for-existing-implementations)
+Check your implementation status in [SURVEY-REPORT.md](SURVEY-REPORT.md). If vulnerable, consider adding a version counter or other protection mechanism (see Solutions section).
 
 ## 🤝 Contributing
 
-To add analysis of additional implementations:
-1. Clone the repository
-2. Follow the [methodology](SURVEY-REPORT.md#survey-methodology)
-3. Add findings to SURVEY-REPORT.md
-4. Update this index
+To add more implementations: follow the [methodology](SURVEY-REPORT.md#survey-methodology), update SURVEY-REPORT.md and clone-repos.sh.
 
 ---
 
-**Survey Date**: November 2025
-**Implementations Analyzed**: 16
-**Total Stars**: 60,000+
-**Finding**: 67% vulnerable to replication session isolation bug
+**Survey**: 16 implementations, 60K+ stars, 67% vulnerable (November 2025)
