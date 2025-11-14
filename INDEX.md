@@ -11,11 +11,36 @@
 
 - [README.md](README.md) - Overview and results summary
 - [SURVEY-REPORT.md](SURVEY-REPORT.md) - Comprehensive analysis of 16 implementations
+- [analysis/](analysis/) - Individual analysis reports for all 16 implementations
 - [raft-rs-replication-bug.md](raft-rs-replication-bug.md) - Technical article (English)
 - [raft-rs-replication-bug-zh.md](raft-rs-replication-bug-zh.md) - Technical article (Chinese)
-- [hashicorp-raft-analysis.md](hashicorp-raft-analysis.md) - Detailed analysis (VULNERABLE)
-- [sofa-jraft-analysis.md](sofa-jraft-analysis.md) - Detailed analysis (PROTECTED)
 - [raft-rs-replication-session-issue.md](raft-rs-replication-session-issue.md) - Original research (Chinese)
+
+## 📁 Individual Implementation Analyses
+
+All implementations have detailed individual analysis reports in [analysis/](analysis/):
+
+**Protected (6 implementations)**:
+- [braft.md](analysis/braft.md) - CallId-based session tracking
+- [apache-ratis.md](analysis/apache-ratis.md) - CallId matching with RequestMap
+- [nuraft.md](analysis/nuraft.md) - RPC client ID validation
+- [rabbitmq-ra.md](analysis/rabbitmq-ra.md) - Cluster membership validation
+- [sofa-jraft.md](analysis/sofa-jraft.md) - Version counter
+- [canonical-raft.md](analysis/canonical-raft.md) - Configuration membership check
+
+**Vulnerable (9 implementations)**:
+- [hashicorp-raft.md](analysis/hashicorp-raft.md) - No session isolation
+- [dragonboat.md](analysis/dragonboat.md) - Term-only validation
+- [raft-rs.md](analysis/raft-rs.md) - Monotonicity check insufficient
+- [logcabin.md](analysis/logcabin.md) - Insufficient epoch validation
+- [raft-java.md](analysis/raft-java.md) - No request-response correlation
+- [willemt-raft.md](analysis/willemt-raft.md) - Insufficient stale detection
+- [etcd-raft.md](analysis/etcd-raft.md) - No session validation
+- [redisraft.md](analysis/redisraft.md) - msg_id resets on rejoin
+- [pysyncobj.md](analysis/pysyncobj.md) - Zero validation
+
+**Not Applicable (1 implementation)**:
+- [eliben-raft.md](analysis/eliben-raft.md) - No membership changes (educational)
 
 ## 🔍 Quick Reference
 
@@ -29,13 +54,13 @@
 
 ### Most Popular Implementations
 
-| Implementation | Stars | Status | Document |
+| Implementation | Stars | Status | Analysis |
 |----------------|-------|--------|----------|
-| hashicorp/raft | 8,826 | ✗ VULNERABLE | [Analysis](hashicorp-raft-analysis.md) |
-| dragonboat | 5,262 | ✗ VULNERABLE | [Survey](SURVEY-REPORT.md#dragonboat-5262-stars---vulnerable) |
-| braft | 4,174 | ✓ PROTECTED | [Survey](SURVEY-REPORT.md#braft-4174-stars---protected-) |
-| sofa-jraft | 3,762 | ✓ PROTECTED | [Analysis](sofa-jraft-analysis.md) |
-| raft-rs (TiKV) | 3,224 | ✗ VULNERABLE | [Article](raft-rs-replication-bug.md) |
+| hashicorp/raft | 8,826 | ✗ VULNERABLE | [Report](analysis/hashicorp-raft.md) |
+| dragonboat | 5,262 | ✗ VULNERABLE | [Report](analysis/dragonboat.md) |
+| braft | 4,174 | ✓ PROTECTED | [Report](analysis/braft.md) |
+| sofa-jraft | 3,762 | ✓ PROTECTED | [Report](analysis/sofa-jraft.md) |
+| raft-rs (TiKV) | 3,224 | ✗ VULNERABLE | [Report](analysis/raft-rs.md) |
 
 ### Protection Mechanisms
 

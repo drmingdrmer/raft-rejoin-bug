@@ -498,24 +498,26 @@ This bug is widespread, affecting **67% of Raft implementations** with membershi
 rejoin-bug-survey/
 ├── README.md                       # Overview
 ├── SURVEY-REPORT.md               # This comprehensive report
-├── hashicorp-raft-analysis.md     # Individual analysis
-├── sofa-jraft-analysis.md         # Individual analysis
-├── hashicorp-raft/                # Source code
-├── dragonboat/                    # Source code
-├── sofa-jraft/                    # Source code
-├── raft-rs/                       # Source code
-├── braft/                         # Source code
-├── apache-ratis/                  # Source code
-├── nuraft/                        # Source code
-├── raft-java/                     # Source code
-├── logcabin/                      # Source code
-├── eliben-raft/                   # Source code
-├── rabbitmq-ra/                   # Source code
-├── pysyncobj/                     # Source code
-├── willemt-raft/                  # Source code
-├── canonical-raft/                # Source code
-├── etcd-raft/                     # Source code
-└── redisraft/                     # Source code
+├── INDEX.md                       # Document navigation
+├── analysis/                      # Individual analysis reports
+├── clone-repos.sh                 # Script to clone all repos
+└── repos/                         # Cloned source code
+    ├── hashicorp-raft/
+    ├── dragonboat/
+    ├── sofa-jraft/
+    ├── raft-rs/
+    ├── braft/
+    ├── apache-ratis/
+    ├── nuraft/
+    ├── raft-java/
+    ├── logcabin/
+    ├── eliben-raft/
+    ├── rabbitmq-ra/
+    ├── pysyncobj/
+    ├── willemt-raft/
+    ├── canonical-raft/
+    ├── etcd-raft/
+    └── redisraft/
 ```
 
 ## Survey Methodology

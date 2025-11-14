@@ -1,5 +1,8 @@
 #!/bin/bash
 
+mkdir -p repos
+cd repos
+
 [ -d "hashicorp-raft" ] || git clone --depth 1 https://github.com/hashicorp/raft.git hashicorp-raft
 [ -d "dragonboat" ] || git clone --depth 1 https://github.com/lni/dragonboat.git dragonboat
 [ -d "sofa-jraft" ] || git clone --depth 1 https://github.com/sofastack/sofa-jraft.git sofa-jraft

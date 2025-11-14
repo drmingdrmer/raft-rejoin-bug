@@ -1,21 +1,4 @@
 # Cloned Raft implementation repositories
 # These are large and can be re-cloned using clone-repos.sh
 
-apache-kudu/
-apache-ratis/
-braft/
-canonical-raft/
-dotnext/
-dragonboat/
-eliben-raft/
-etcd-raft/
-hashicorp-raft/
-logcabin/
-nuraft/
-pysyncobj/
-rabbitmq-ra/
-raft-java/
-raft-rs/
-redisraft/
-sofa-jraft/
-willemt-raft/
+repos/

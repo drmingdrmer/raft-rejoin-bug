@@ -6,8 +6,7 @@ This directory contains a comprehensive survey of 16 popular Raft implementation
 
 - **[📑 DOCUMENT INDEX](INDEX.md)** - Complete document navigation and reading paths
 - **[📊 SURVEY REPORT](SURVEY-REPORT.md)** - Comprehensive analysis of all 16 implementations
-- [hashicorp/raft Analysis](hashicorp-raft-analysis.md) - Detailed analysis of HashiCorp's implementation
-- [sofa-jraft Analysis](sofa-jraft-analysis.md) - Detailed analysis of SOFAJRaft's implementation
+- **[📁 ANALYSIS DIRECTORY](analysis/)** - Individual analysis reports for each implementation
 - [Blog Article (EN)](raft-rs-replication-bug.md) - Technical article explaining the bug
 - [Blog Article (中文)](raft-rs-replication-bug-zh.md) - Technical article in Chinese
 
