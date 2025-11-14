@@ -496,9 +496,8 @@ This bug is widespread, affecting **67% of Raft implementations** with membershi
 
 ```
 rejoin-bug-survey/
-├── README.md                       # Overview
+├── README.md                       # Overview and document navigation
 ├── SURVEY-REPORT.md               # This comprehensive report
-├── INDEX.md                       # Document navigation
 ├── analysis/                      # Individual analysis reports
 ├── clone-repos.sh                 # Script to clone all repos
 └── repos/                         # Cloned source code

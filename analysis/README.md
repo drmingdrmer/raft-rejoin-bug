@@ -86,8 +86,7 @@ Each analysis report contains:
 
 ## Related Documents
 
-- [../README.md](../README.md) - Survey overview
+- [../README.md](../README.md) - Survey overview and document navigation
 - [../SURVEY-REPORT.md](../SURVEY-REPORT.md) - Comprehensive survey report
-- [../INDEX.md](../INDEX.md) - Document index and navigation
 - [../raft-rs-replication-bug.md](../raft-rs-replication-bug.md) - Technical article (English)
 - [../raft-rs-replication-bug-zh.md](../raft-rs-replication-bug-zh.md) - Technical article (Chinese)
