@@ -1,538 +1,226 @@
-# Replication Session Isolation Bug Survey - Comprehensive Analysis
+# Replication Session Isolation Bug Survey
 
-## Executive Summary
+This survey analyzes popular Raft implementations for a replication progress corruption bug that occurs during membership changes. The bug allows delayed AppendEntries responses from old replication sessions to corrupt progress tracking after a node is removed and rejoined.
 
-This survey analyzes 16 popular Raft implementations (>700 GitHub stars) for a critical replication progress corruption bug that occurs during membership changes. The bug allows delayed AppendEntries responses from old replication sessions to corrupt progress tracking after a node is removed and rejoined.
+## The Bug: A Concrete Example with raft-rs
 
-### Results Overview
+We use **raft-rs** (TiKV's Raft library, 3,224 stars) as a concrete example to demonstrate how this bug occurs.
 
-| Implementation     | Stars     | Language   | Status  | Protection Mechanism           |
-|----------------    |-------    |----------  |-------- |---------------------           |
-| OpenRaft           | 1,725     | Rust       | ✓       | LogId-based session tracking   |
-| braft              | 4,174     | C++        | ✓       | CallId-based session tracking  |
-| Apache Ratis       | 1,418     | Java       | ✓       | CallId matching                |
-| NuRaft             | 1,140     | C++        | ✓       | RPC client ID validation       |
-| RabbitMQ Ra        | 908       | Erlang     | ✓       | Cluster membership check       |
-| sofa-jraft         | 3,762     | Java       | ✓       | Version counter                |
-| canonical/raft     | 954       | C          | ✓       | Configuration membership check |
-| **hashicorp/raft** | **8,826** | **Go**     | **✗**   | None                           |
-| **dragonboat**     | **5,262** | **Go**     | **✗**   | None                           |
-| **raft-rs (TiKV)** | **3,224** | **Rust**   | **✗**   | None                           |
-| **LogCabin**       | **1,945** | **C++**    | **✗**   | None                           |
-| **raft-java**      | **1,234** | **Java**   | **✗**   | None                           |
-| **willemt/raft**   | **1,160** | **C**      | **✗**   | None                           |
-| **etcd-io/raft**   | **943**   | **Go**     | **✗**   | None                           |
-| **redisraft**      | **841**   | **C**      | **✗**   | None                           |
-| **PySyncObj**      | **738**   | **Python** | **✗**   | None                           |
-| eliben/raft        | 1,232     | Go         | N/A     | No membership changes          |
+### How raft-rs Tracks Replication Progress
 
-**Summary**:
-- **10 out of 15** implementations with membership changes are **VULNERABLE (67%)**
-- **5 out of 15** implementations are **PROTECTED (33%)**
-- **1 implementation** does not support membership changes (educational)
+File: [`src/tracker/progress.rs:8-56`](https://github.com/tikv/raft-rs/blob/master/src/tracker/progress.rs#L8-L56)
 
-## Bug Description
+```rust
+pub struct Progress {
+    pub matched: u64,      // Highest log index known to be replicated
+    pub next_idx: u64,     // Next log index to send
+    pub state: ProgressState,
+    pub pending_snapshot: u64,
+    // No session version or ID field!
+}
+```
 
-### The Problem
+The leader maintains a `Progress` struct for each follower. When a follower successfully replicates log entries, the leader updates `matched` and `next_idx`.
 
-When a node is removed and re-added to a Raft cluster within the same term, delayed AppendEntries responses from the old replication session can arrive after the node rejoins. Without proper session isolation, the leader incorrectly updates the new session's progress tracking with stale data, causing:
+### The Vulnerable Update Logic
 
-1. **Infinite retry loops** - Leader sends wrong log indices
-2. **Resource exhaustion** - Continuous failed replication attempts
-3. **Operational confusion** - Logs resembling data corruption
+File: [`src/tracker/progress.rs:136-148`](https://github.com/tikv/raft-rs/blob/master/src/tracker/progress.rs#L136-L148)
 
-While the bug does not compromise data safety (Raft's commit protocol still works correctly), it causes significant operational problems.
+```rust
+pub fn maybe_update(&mut self, n: u64) -> bool {
+    let need_update = self.matched < n;  // Only checks monotonicity
+    if need_update {
+        self.matched = n;
+        self.next_idx = n + 1;
+        self.resume();
+    }
+    need_update
+}
+```
 
-### Attack Scenario
+**The problem**: `maybe_update` only checks if the new index is higher than current `matched`. After a node rejoins, `matched` is reset to 0, so **any delayed response with index > 0 will be accepted**.
+
+### Attack Scenario with raft-rs
 
 ```
 Timeline | Event                                    | Progress State
 ---------|------------------------------------------|------------------
-T1       | Node C in cluster                        | C: matched=50
+T1       | Node C in cluster, term=5                | C: matched=50
          | Leader sends AppendEntries(index=50)     | (network delay)
          |                                          |
 T2       | Node C removed from cluster              | C: [deleted]
-         | Progress[C] deleted                      |
+         | Progress[C] removed from tracker         |
          |                                          |
-T3       | Node C rejoins cluster                   | C: matched=0 (new)
+T3       | Node C rejoins cluster (still term=5)    | C: matched=0 (new)
          | New Progress[C] created                  |
          |                                          |
 T4       | Delayed response arrives                 | C: matched=50 ❌
          | {from: C, index: 50, success: true}      | Corrupted!
-         | Leader updates NEW Progress[C]           |
+         | maybe_update(50) returns true            | (50 > 0) ✓
+         | matched set to 50, next_idx to 51        |
          |                                          |
 T5       | Leader sends AppendEntries(prev=50)      |
-         | Node C rejects (doesn't have index 50)   |
-         | Infinite loop begins                     |
+         | Node C rejects (actual log < 50)         |
+         | Leader decrements next_idx               |
+         | But delayed responses keep resetting it! |
+         | Infinite loop continues                  |
 ```
+
+### Why Monotonicity Check Is Insufficient
+
+After node C rejoins:
+- New `Progress[C]` has `matched=0`
+- Delayed response arrives with `index=50`
+- `maybe_update(50)` checks: `0 < 50` → **true** ✓
+- Progress corrupted to `matched=50` even though C's actual log is empty!
 
 ### Root Cause
 
-The bug occurs because:
+1. **No session isolation**: `Progress` struct lacks session identifier
+2. **Monotonicity check insufficient**: Works within a session, fails across session boundaries
+3. **Term-only validation**: Cannot distinguish messages from different membership configurations within same term
+4. **No request-response correlation**: No mechanism to match responses with sent requests
 
-1. **Membership changes don't require term changes** - A leader can remove and re-add a node within the same term
-2. **Term-only validation is insufficient** - Messages from different replication sessions within the same term cannot be distinguished
-3. **No session identifiers** - Most implementations lack a mechanism to identify which replication session a response belongs to
+### Impact
 
-## Protection Mechanisms Found
+**Operational problems**:
+- Infinite retry loops - Leader sends wrong log indices
+- Resource exhaustion - Continuous failed replication attempts
+- TiKV nodes unable to replicate data
+- Manual restart required to recover
 
-### 1. CallId-Based Session Tracking (braft, Apache Ratis)
+**Data safety**:
+- ✓ Not compromised - Raft's commit protocol still ensures safety
+- The bug causes operational issues, not data loss
 
-**How it works**: Each RPC request is assigned a unique CallId. Responses must match a pending request with the same CallId.
+## How to Fix It in raft-rs
 
-**braft example** (`replicator.cpp:384-398`):
-```cpp
-for (std::deque<FlyingAppendEntriesRpc>::iterator rpc_it =
-     r->_append_entries_in_fly.begin();
-     rpc_it != r->_append_entries_in_fly.end(); ++rpc_it) {
-    if (rpc_it->call_id == cntl->call_id()) {
-        valid_rpc = true;
-    }
-}
-if (!valid_rpc) {
-    // Ignore stale response
-    return;
-}
-```
+### Add Version Counter (Recommended)
 
-**Apache Ratis example** (`GrpcLogAppender.java:961-967`):
-```java
-AppendEntriesRequest remove(AppendEntriesReplyProto reply) {
-    return remove(reply.getServerReply().getCallId(), reply.getIsHearbeat());
-}
-```
+Modify the `Progress` struct to include a session version:
 
-### 2. Version/Generation Counter (sofa-jraft)
-
-**How it works**: Each replicator maintains a version counter that increments on reset. Responses include the version and are validated.
-
-**sofa-jraft example** (`Replicator.java:1274`):
-```java
-if (stateVersion != r.version) {
-    LOG.debug("Replicator {} ignored old version response {}",
-              r, stateVersion);
-    return;  // Stale response rejected
-}
-```
-
-**Lifecycle**:
-```java
-void resetInflights() {
-    this.version++;  // New session
-    this.inflights.clear();
-}
-```
-
-### 3. RPC Client ID Validation (NuRaft)
-
-**How it works**: RPC client object identity is captured when sending requests. Responses are validated against the current RPC client ID.
-
-**NuRaft example** (`peer.cxx:119-143`):
-```cpp
-uint64_t cur_rpc_id = rpc_ ? rpc_->get_id() : 0;
-uint64_t given_rpc_id = my_rpc_client ? my_rpc_client->get_id() : 0;
-
-if (cur_rpc_id != given_rpc_id) {
-    inc_stale_rpc_responses();
-    return;  // Reject stale response
-}
-```
-
-### 4. Configuration Membership Validation (canonical-raft, RabbitMQ Ra)
-
-**How it works**: Responses are only accepted from servers in the current configuration.
-
-**canonical-raft example** (`recv_append_entries_result.c:57-62`):
-```c
-server = configurationGet(&r->configuration, id);
-if (server == NULL) {
-    tracef("unknown server -> ignore");
-    return 0;  // Response from non-member rejected
-}
-```
-
-**RabbitMQ Ra example** (`ra_server.erl:474`):
-```erlang
-case peer(PeerId, State0) of
-    undefined ->
-        ?WARN("saw append_entries_reply from unknown peer"),
-        {leader, State0, []};
-    Peer0 = #{match_index := MI} ->
-        % Process response
-```
-
-## Vulnerable Implementations - Detailed Analysis
-
-### hashicorp/raft (8,826 stars) - VULNERABLE
-
-**Evidence**: No session isolation mechanism.
-- Progress deletion: `raft.go:582-593` - `delete(r.leaderState.replState, serverID)`
-- New progress creation: `raft.go:546-565` - No session identifier
-- Response handling: `replication.go:643-653` - Direct update without validation
-
-**Message format**: `commands.go:27-69` - Only term field
-
----
-
-### dragonboat (5,262 stars) - VULNERABLE
-
-**Evidence**: Term-only validation, no session tracking.
-- Progress tracking: `internal/raft/remote.go:72-80` - No version field
-- Response handling: `internal/raft/raft.go:1878-1907` - No session validation
-- Critical flaw: `lw()` wrapper always passes current remote pointer
-
----
-
-### raft-rs / TiKV (3,224 stars) - VULNERABLE
-
-**Evidence**: No session isolation.
-- Progress tracking: `src/tracker/progress.rs:8-56` - No session ID
-- Progress update: `src/tracker/progress.rs:136-148` - Only monotonicity check
-- Message format: `proto/proto/eraftpb.proto:71-98` - Only term field
-
----
-
-### LogCabin (1,945 stars) - VULNERABLE
-
-**Evidence**: Insufficient epoch validation.
-- Response handling: `RaftConsensus.cc:2309-2371` - Only checks term and peer.exiting
-- Epoch tracking: Line 2323 - Only for leadership, not response validation
-- New peer creation: `RaftConsensus.cc:727-738` - Zero state, no session ID
-
----
-
-### raft-java (1,234 stars) - VULNERABLE
-
-**Evidence**: No request-response correlation.
-- Response handling: `RaftNode.java:255-294` - No validation
-- Peer reuse: `RaftNode.java:406-412` - May reuse old peer object
-- No correlation IDs in protocol
-
----
-
-### willemt/raft (1,160 stars) - VULNERABLE
-
-**Evidence**: Insufficient stale detection.
-- Response handler: `src/raft_server.c:275-349` - Fails when match_idx=0
-- Node initialization: `src/raft_node.c:39-51` - Zeroed state on rejoin
-- Message format: `include/raft.h:185-203` - No session ID
-
----
-
-### etcd-io/raft (943 stars) - VULNERABLE
-
-**Evidence**: No session validation.
-- Progress deletion: `confchange/confchange.go:242` - `delete(trk, id)`
-- Response handler: `raft.go:1370-1374` - Pure node ID lookup
-- Progress update: `tracker/progress.go:205-213` - Accepts any higher index
-
----
-
-### redisraft (841 stars) - VULNERABLE
-
-**Evidence**: msg_id resets on rejoin.
-- Missing NULL check: `src/raft.c:888-893`
-- Node initialization: `deps/raft/src/raft_node.c:40-56` - match_msgid = 0
-- Stale check fails: `deps/raft/src/raft_server.c:725-747` - Because match_msgid=0
-
----
-
-### PySyncObj (738 stars) - VULNERABLE
-
-**Evidence**: Zero validation in response handler.
-- Response handler: `syncobj.py:987-1000` - Direct progress update
-- Node removal: `syncobj.py:1322-1323` - Progress deleted
-- Node addition: `syncobj.py:1309-1310` - Fresh state, no session tracking
-
----
-
-## Protected Implementations - Detailed Analysis
-
-### braft (4,174 stars) - PROTECTED ✓
-
-**Protection**: CallId-based session isolation via brpc RPC framework.
-
-**How it works**:
-- Each RPC gets unique call_id from brpc Controller
-- Request: `call_id` stored in `FlyingAppendEntriesRpc` (line 691)
-- Response: Validated against in-flight queue (lines 384-398)
-- Node removal: All RPCs canceled, queue cleared (lines 1077-1084)
-
-**Files**: `src/braft/replicator.cpp`
-
----
-
-### Apache Ratis (1,418 stars) - PROTECTED ✓
-
-**Protection**: CallId matching with RequestMap.
-
-**How it works**:
-- CallId counter per LogAppender instance (line 159)
-- Requests stored in RequestMap indexed by callId (lines 953-958)
-- Response removal: `pendingRequests.remove(reply.callId)` (line 488)
-- Returns null for stale responses → no state update
-
-**Files**: `ratis-grpc/src/main/java/org/apache/ratis/grpc/server/GrpcLogAppender.java`
-
----
-
-### NuRaft (1,140 stars) - PROTECTED ✓
-
-**Protection**: RPC client ID validation.
-
-**How it works**:
-- RPC client pointer captured in request closure (lines 31-84)
-- Response validation: Compare captured ID with current ID (lines 119-143)
-- ID mismatch: Early return before progress update
-- Stale response counter incremented
-
-**Files**: `peer.cxx`
-
----
-
-### RabbitMQ Ra (908 stars) - PROTECTED ✓
-
-**Protection**: Cluster membership validation.
-
-**How it works**:
-- Peer lookup: `peer(PeerId, State0)` checks cluster map (line 474)
-- Returns `undefined` for non-members
-- Node removal: Deleted from cluster map (line 3053)
-- Node rejoin: New peer entry created (line 3026)
-
-**Files**: `src/ra_server.erl`
-
----
-
-### sofa-jraft (3,762 stars) - PROTECTED ✓
-
-**Protection**: Version counter per replicator.
-
-**How it works**:
-- Version field incremented on reset (line 1387)
-- Version captured when sending request
-- Response validation: `stateVersion != r.version` → reject (line 1274)
-- Node removal: Replicator destroyed with its version
-- Node rejoin: New replicator with version=0
-
-**Files**: `Replicator.java`
-
----
-
-### canonical-raft (954 stars) - PROTECTED ✓
-
-**Protection**: Configuration membership checking.
-
-**How it works**:
-- Entry point validation (lines 57-62)
-- `configurationGet()` returns NULL for non-members
-- Progress array rebuilt on config change
-- Fresh index always computed from current config
-
-**Files**: `src/recv_append_entries_result.c`, `src/replication.c`
-
----
-
-## Comparison of Protection Mechanisms
-
-| Mechanism | Implementations | Pros | Cons |
-|-----------|-----------------|------|------|
-| CallId matching | braft, Apache Ratis | • Robust<br>• Framework-integrated<br>• Per-request tracking | • Requires RPC framework support<br>• Extra state per request |
-| Version counter | sofa-jraft | • Simple<br>• No protocol changes<br>• Explicit sessions | • Per-replicator state<br>• Closure-based pattern |
-| RPC client ID | NuRaft | • Implicit isolation<br>• Automatic<br>• No protocol changes | • Depends on RPC implementation<br>• Pointer-based |
-| Membership check | canonical-raft, Ra | • Natural boundary<br>• No extra fields | • Must handle edge cases<br>• Requires membership tracking |
-| None (term-only) | 10 implementations | • Simple<br>• Minimal state | • **Vulnerable to bug** |
-
-## Solutions and Recommendations
-
-### Solution 1: Version Counter (Recommended for existing implementations)
-
-Add a version/generation counter that increments on replicator reset.
-
-**Pros**:
-- No protocol changes required
-- Works at application level
-- Simple to implement
-
-**Example**:
 ```rust
-struct Replicator {
-    version: u64,
-    matched: u64,
-    next_idx: u64,
+pub struct Progress {
+    pub matched: u64,
+    pub next_idx: u64,
+    pub state: ProgressState,
+    pub pending_snapshot: u64,
+    pub session_version: u64,  // ← Add this field
 }
 
-impl Replicator {
-    fn reset(&mut self) {
-        self.version += 1;
-        // Clear state
+impl Progress {
+    pub fn reset(&mut self) {
+        self.session_version += 1;  // ← Increment on reset
+        self.matched = 0;
+        self.next_idx = 1;
+        self.state = ProgressState::Probe;
     }
 
-    fn send_request(&self) {
-        let version = self.version;
-        send_rpc(request, move |response| {
-            if response.version != version {
-                return; // Stale
-            }
-            // Process
-        });
+    pub fn maybe_update(&mut self, n: u64, response_version: u64) -> bool {
+        // ← Validate session first
+        if response_version != self.session_version {
+            return false;  // Reject stale response
+        }
+
+        let need_update = self.matched < n;
+        if need_update {
+            self.matched = n;
+            self.next_idx = n + 1;
+            self.resume();
+        }
+        need_update
     }
 }
 ```
 
-### Solution 2: CallId/Request Correlation
+**Why this works**:
+- When node C is removed at T2, `Progress[C]` is deleted
+- When node C rejoins at T3, new `Progress[C]` created with `session_version=0`
+- First `reset()` call increments to `session_version=1`
+- At T4, delayed response has `response_version=0` (from old session)
+- Validation fails: `0 != 1` → response rejected ✓
 
-Assign unique ID to each request and validate responses.
+**Benefits**:
+- No protocol changes needed
+- Minimal code changes
+- Zero performance overhead
 
-**Pros**:
-- Robust per-request tracking
-- Can detect all stale responses
+## General Solutions for Other Implementations
 
-**Cons**:
-- Requires request queue management
-- Extra state overhead
+The version counter approach shown above can be adapted to any implementation. Other protection mechanisms found in surveyed implementations:
 
-### Solution 3: Membership Log ID in Messages
+### Membership Log ID Tracking
 
-Add membership_log_id to message protocol.
+Include the log ID where membership was committed in session identifier. Explicit session boundary at membership changes.
 
-**Pros**:
-- Explicit session tracking
-- Wire-level validation
+### CallId/Request Correlation
 
-**Cons**:
-- Protocol changes required
-- All implementations must upgrade
+Assign unique ID to each request, validate responses against in-flight queue. Leverages RPC framework capabilities.
 
-### Solution 4: Configuration Membership Validation
+### Configuration Membership Validation
 
-Validate sender is in current configuration.
+Validate response sender is still in current configuration. Natural session boundary, but requires careful handling of rapid changes.
 
-**Pros**:
-- Natural session boundary
-- No extra fields
+## Implementation Analysis
 
-**Cons**:
-- Edge cases with rapid changes
-- Must track configuration carefully
+For detailed analysis of how each implementation handles (or fails to handle) this bug, see:
 
-## Impact Assessment
+### Protected Implementations
 
-### Data Safety
+- [openraft](analysis/openraft.md) - Vote + Membership log ID
+- [braft](analysis/braft.md) - CallId-based session tracking
+- [Apache Ratis](analysis/apache-ratis.md) - CallId matching with RequestMap
+- [NuRaft](analysis/nuraft.md) - RPC client ID validation
+- [RabbitMQ Ra](analysis/rabbitmq-ra.md) - Cluster membership validation
+- [sofa-jraft](analysis/sofa-jraft-analysis.md) - Version counter
+- [canonical/raft](analysis/canonical-raft.md) - Configuration membership check
 
-✓ **Not compromised** - Raft's commit protocol ensures:
-- Commit index uses actual majority
-- Overlapping majorities guarantee
-- New leaders have committed entries
+### Vulnerable Implementations
 
-### Operational Impact
+- [hashicorp/raft](analysis/hashicorp-raft-analysis.md) - No session isolation
+- [dragonboat](analysis/dragonboat.md) - Term-only validation insufficient
+- [raft-rs (TiKV)](analysis/raft-rs.md) - Monotonicity check insufficient
+- [LogCabin](analysis/logcabin.md) - Insufficient epoch validation
+- [raft-java](analysis/raft-java.md) - No request-response correlation
+- [willemt/raft](analysis/willemt-raft.md) - Insufficient stale detection
+- [etcd-io/raft](analysis/etcd-raft.md) - No session validation
+- [redisraft](analysis/redisraft.md) - msg_id resets on rejoin
+- [PySyncObj](analysis/pysyncobj.md) - Zero validation
 
-✗ **Significant problems**:
-1. **Infinite retry loops** - Nodes cannot catch up
-2. **Resource exhaustion** - CPU and network waste
-3. **False alarms** - Logs suggest corruption
-4. **Manual intervention** - Restarts required
-5. **Reduced fault tolerance** - Fewer healthy replicas
+### Not Applicable
 
-### Trigger Conditions
+- [eliben/raft](analysis/eliben-raft.md) - No membership changes (educational)
 
-Requires all of:
-1. Node removed then re-added
-2. Both in same term
-3. Delayed response from old session
-4. Response arrives after rejoin
+## Recommendations
 
-**Probability**:
-- Production: Low to medium
-- Network simulation testing: High
-- Automated membership changes: Medium
+For vulnerable implementations:
 
-## Language/Ecosystem Analysis
+1. **Immediate**: Add version counter (as shown in raft-rs fix) - minimal changes, no protocol modifications
+2. **Better**: Implement membership log ID tracking - explicit session isolation
+3. **Best**: Combine with RPC framework call IDs - comprehensive protection
 
-| Language | Total | Vulnerable | Protected | Vulnerability Rate |
-|----------|-------|------------|-----------|-------------------|
-| Go | 4 | 3 | 0 | **75%** |
-| C++ | 3 | 1 | 2 | 33% |
-| Java | 3 | 1 | 2 | 33% |
-| C | 3 | 2 | 1 | 67% |
-| Rust | 1 | 1 | 0 | **100%** |
-| Erlang | 1 | 0 | 1 | 0% |
-| Python | 1 | 1 | 0 | **100%** |
+For new implementations:
 
-**Observation**: Go and Rust implementations show higher vulnerability rates, possibly due to simpler baseline implementations.
-
-## Conclusion
-
-This bug is widespread, affecting **67% of Raft implementations** with membership change support. The most popular implementations (hashicorp/raft, dragonboat, raft-rs, etcd-io/raft) are all vulnerable.
-
-### Key Findings
-
-1. **Term-based validation alone is insufficient** for ensuring message freshness when membership changes occur within the same term
-
-2. **Explicit session management is necessary** - Through version counters, CallIds, RPC client IDs, or membership validation
-
-3. **The bug does not threaten data safety** but causes serious operational problems
-
-4. **Protected implementations** demonstrate multiple viable solutions that don't require protocol changes
-
-### Recommendations
-
-**For vulnerable implementations**:
-1. **Immediate**: Add version counter (simplest, no protocol changes)
-2. **Alternative**: Implement CallId correlation or membership validation
-3. **Long-term**: Consider adding membership_log_id to protocol
-
-**For new implementations**:
-- Design with session isolation from the start
-- Follow sofa-jraft, braft, or NuRaft patterns
-- Don't rely solely on term validation
-
-**For operators**:
-- Be aware of this issue when doing membership changes
-- Monitor for infinite retry patterns
-- Consider using learner → voter promotions to reduce risk
-
-## Repository Structure
-
-```
-rejoin-bug-survey/
-├── README.md                       # Overview and document navigation
-├── SURVEY-REPORT.md               # This comprehensive report
-├── analysis/                      # Individual analysis reports
-├── clone-repos.sh                 # Script to clone all repos
-└── repos/                         # Cloned source code
-    ├── hashicorp-raft/
-    ├── dragonboat/
-    ├── sofa-jraft/
-    ├── raft-rs/
-    ├── braft/
-    ├── apache-ratis/
-    ├── nuraft/
-    ├── raft-java/
-    ├── logcabin/
-    ├── eliben-raft/
-    ├── rabbitmq-ra/
-    ├── pysyncobj/
-    ├── willemt-raft/
-    ├── canonical-raft/
-    ├── etcd-raft/
-    └── redisraft/
-```
+- Design with explicit session identifiers from the start
+- Include membership_log_id or version counter in replication session tracking
+- Validate all responses against current session before updating progress
 
 ## Survey Methodology
 
-For each implementation:
+For each implementation, we analyzed:
+
 1. **Progress tracking** - How replication state is maintained
 2. **Message protocol** - Fields in AppendEntries requests/responses
 3. **Membership changes** - How progress is reset on rejoin
-4. **Response validation** - Checks performed on responses
+4. **Response validation** - What checks are performed
 5. **Session isolation** - Mechanisms to distinguish sessions
 
-Analysis performed through source code examination and identification of code paths for node removal, rejoin, and response handling.
+Analysis was performed through:
+- Source code review
+- Protocol message structure examination
+- Replication state management inspection
+- Response handler validation logic review
 
 ---
 
-**Date**: November 2025
-**Analyst**: Automated code analysis
-**Scope**: 16 Raft implementations with >700 GitHub stars
-**Finding**: 67% of implementations with membership changes are vulnerable
+*Survey conducted November 2025*

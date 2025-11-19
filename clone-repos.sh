@@ -19,3 +19,4 @@ cd repos
 [ -d "canonical-raft" ] || git clone --depth 1 https://github.com/canonical/raft.git canonical-raft
 [ -d "etcd-raft" ] || git clone --depth 1 https://github.com/etcd-io/raft.git etcd-raft
 [ -d "redisraft" ] || git clone --depth 1 https://github.com/RedisLabs/redisraft.git redisraft
+[ -d "openraft" ] || git clone --depth 1 https://github.com/databendlabs/openraft.git openraft
