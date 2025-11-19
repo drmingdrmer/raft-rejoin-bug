@@ -1,6 +1,6 @@
 # Raft Replication Session Isolation Bug Survey
 
-This directory contains a comprehensive survey of 16 popular Raft implementations (>700 stars) analyzing their vulnerability to a replication progress corruption bug that occurs during membership changes.
+This directory contains a comprehensive survey of 17 popular Raft implementations (>700 stars) analyzing their vulnerability to a replication progress corruption bug that occurs during membership changes.
 
 ## 🎯 Quick Start
 
@@ -11,8 +11,8 @@ This directory contains a comprehensive survey of 16 popular Raft implementation
 
 ## 📚 Main Documents
 
-- [SURVEY-REPORT.md](SURVEY-REPORT.md) - Comprehensive analysis of 16 implementations
-- [analysis/](analysis/) - Individual analysis reports for all 16 implementations
+- [SURVEY-REPORT.md](SURVEY-REPORT.md) - Comprehensive analysis of 17 implementations
+- [analysis/](analysis/) - Individual analysis reports for all 17 implementations
 - [raft-rs-replication-bug.md](raft-rs-replication-bug.md) - Technical article (English)
 - [raft-rs-replication-bug-zh.md](raft-rs-replication-bug-zh.md) - Technical article (Chinese)
 
@@ -34,6 +34,7 @@ When a node is removed and re-added to a cluster within the same term, delayed A
 | RabbitMQ Ra | 908 | Erlang | ✓ PROTECTED |
 | braft | 4,174 | C++ | ✓ PROTECTED |
 | canonical/raft | 954 | C | ✓ PROTECTED |
+| OpenRaft | 1,700 | Rust | ✓ PROTECTED |
 | sofa-jraft | 3,762 | Java | ✓ PROTECTED |
 | **LogCabin** | **1,945** | **C++** | **✗ VULNERABLE** |
 | **PySyncObj** | **738** | **Python** | **✗ VULNERABLE** |
@@ -58,9 +59,9 @@ When a node is removed and re-added to a cluster within the same term, delayed A
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| VULNERABLE | 10/15 | 67% |
-| PROTECTED | 5/15 | 33% |
-| N/A (no membership changes) | 1/16 | - |
+| VULNERABLE | 9/16 | 56% |
+| PROTECTED | 7/16 | 44% |
+| N/A (no membership changes) | 1/17 | - |
 
 ### Most Popular Implementations
 
@@ -76,6 +77,7 @@ When a node is removed and re-added to a cluster within the same term, delayed A
 
 | Mechanism | Implementations | Complexity | Protocol Changes |
 |-----------|----------------|------------|------------------|
+| Vote + Membership log ID | openraft | Low | No |
 | CallId matching | braft, Apache Ratis | Medium | No |
 | Version counter | sofa-jraft | Low | No |
 | RPC client ID | NuRaft | Low | No |
@@ -110,7 +112,8 @@ if (server == NULL) {
 
 All implementations have detailed individual analysis reports in [analysis/](analysis/):
 
-**Protected (6 implementations)**:
+**Protected (7 implementations)**:
+- [OpenRaft.md](analysis/openraft.md) - Vote + Membership log ID
 - [apache-ratis.md](analysis/apache-ratis.md) - CallId matching with RequestMap
 - [braft.md](analysis/braft.md) - CallId-based session tracking
 - [canonical-raft.md](analysis/canonical-raft.md) - Configuration membership check
@@ -134,7 +137,7 @@ All implementations have detailed individual analysis reports in [analysis/](ana
 
 ## Scripts
 
-Clone all 16 implementations for local analysis:
+Clone all 17 implementations for local analysis:
 
 ```bash
 ./clone-repos.sh
@@ -168,4 +171,4 @@ To add more implementations: open an [issue](https://github.com/drmingdrmer/raft
 
 ---
 
-**Survey**: 16 implementations, 60K+ stars, 67% vulnerable (November 2025)
+**Survey**: 17 implementations, 60K+ stars, 56% vulnerable (November 2025)
