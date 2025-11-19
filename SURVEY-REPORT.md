@@ -167,25 +167,25 @@ For detailed analysis of how each implementation handles (or fails to handle) th
 
 ### Protected Implementations
 
-- [openraft](analysis/openraft.md) - Vote + Membership log ID
-- [braft](analysis/braft.md) - CallId-based session tracking
 - [Apache Ratis](analysis/apache-ratis.md) - CallId matching with RequestMap
 - [NuRaft](analysis/nuraft.md) - RPC client ID validation
 - [RabbitMQ Ra](analysis/rabbitmq-ra.md) - Cluster membership validation
-- [sofa-jraft](analysis/sofa-jraft-analysis.md) - Version counter
+- [braft](analysis/braft.md) - CallId-based session tracking
 - [canonical/raft](analysis/canonical-raft.md) - Configuration membership check
+- [OpenRaft](analysis/openraft.md) - Vote + Membership log ID
+- [sofa-jraft](analysis/sofa-jraft-analysis.md) - Version counter
 
 ### Vulnerable Implementations
 
-- [hashicorp/raft](analysis/hashicorp-raft-analysis.md) - No session isolation
-- [dragonboat](analysis/dragonboat.md) - Term-only validation insufficient
-- [raft-rs (TiKV)](analysis/raft-rs.md) - Monotonicity check insufficient
 - [LogCabin](analysis/logcabin.md) - Insufficient epoch validation
-- [raft-java](analysis/raft-java.md) - No request-response correlation
-- [willemt/raft](analysis/willemt-raft.md) - Insufficient stale detection
-- [etcd-io/raft](analysis/etcd-raft.md) - No session validation
-- [redisraft](analysis/redisraft.md) - msg_id resets on rejoin
 - [PySyncObj](analysis/pysyncobj.md) - Zero validation
+- [dragonboat](analysis/dragonboat.md) - Term-only validation insufficient
+- [etcd-io/raft](analysis/etcd-raft.md) - No session validation
+- [hashicorp/raft](analysis/hashicorp-raft-analysis.md) - No session isolation
+- [raft-java](analysis/raft-java.md) - No request-response correlation
+- [raft-rs (TiKV)](analysis/raft-rs.md) - Monotonicity check insufficient
+- [redisraft](analysis/redisraft.md) - msg_id resets on rejoin
+- [willemt/raft](analysis/willemt-raft.md) - Insufficient stale detection
 
 ### Not Applicable
 

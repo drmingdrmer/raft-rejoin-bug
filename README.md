@@ -27,25 +27,25 @@ When a node is removed and re-added to a cluster within the same term, delayed A
 
 ## Survey Results Summary
 
-| Implementation | Stars | Language | Status |
-|----------------|------:|----------|--------|
-| Apache Ratis | 1,418 | Java | ✓ PROTECTED |
-| NuRaft | 1,140 | C++ | ✓ PROTECTED |
-| RabbitMQ Ra | 908 | Erlang | ✓ PROTECTED |
-| braft | 4,174 | C++ | ✓ PROTECTED |
-| canonical/raft | 954 | C | ✓ PROTECTED |
-| OpenRaft | 1,700 | Rust | ✓ PROTECTED |
-| sofa-jraft | 3,762 | Java | ✓ PROTECTED |
-| **LogCabin** | **1,945** | **C++** | **✗ VULNERABLE** |
-| **PySyncObj** | **738** | **Python** | **✗ VULNERABLE** |
-| **dragonboat** | **5,262** | **Go** | **✗ VULNERABLE** |
-| **etcd-io/raft** | **943** | **Go** | **✗ VULNERABLE** |
-| **hashicorp/raft** | **8,826** | **Go** | **✗ VULNERABLE** |
-| **raft-java** | **1,234** | **Java** | **✗ VULNERABLE** |
-| **raft-rs (TiKV)** | **3,224** | **Rust** | **✗ VULNERABLE** |
-| **redisraft** | **841** | **C** | **✗ VULNERABLE** |
-| **willemt/raft** | **1,160** | **C** | **✗ VULNERABLE** |
-| eliben/raft | 1,232 | Go | N/A |
+| Implementation | Stars | Language | Status | Analysis |
+|----------------|------:|----------|--------|----------|
+| Apache Ratis | 1,418 | Java | ✓ PROTECTED | [Report](analysis/apache-ratis.md) |
+| NuRaft | 1,140 | C++ | ✓ PROTECTED | [Report](analysis/nuraft.md) |
+| RabbitMQ Ra | 908 | Erlang | ✓ PROTECTED | [Report](analysis/rabbitmq-ra.md) |
+| braft | 4,174 | C++ | ✓ PROTECTED | [Report](analysis/braft.md) |
+| canonical/raft | 954 | C | ✓ PROTECTED | [Report](analysis/canonical-raft.md) |
+| OpenRaft | 1,700 | Rust | ✓ PROTECTED | [Report](analysis/openraft.md) |
+| sofa-jraft | 3,762 | Java | ✓ PROTECTED | [Report](analysis/sofa-jraft-analysis.md) |
+| **LogCabin** | **1,945** | **C++** | **✗ VULNERABLE** | [Report](analysis/logcabin.md) |
+| **PySyncObj** | **738** | **Python** | **✗ VULNERABLE** | [Report](analysis/pysyncobj.md) |
+| **dragonboat** | **5,262** | **Go** | **✗ VULNERABLE** | [Report](analysis/dragonboat.md) |
+| **etcd-io/raft** | **943** | **Go** | **✗ VULNERABLE** | [Report](analysis/etcd-raft.md) |
+| **hashicorp/raft** | **8,826** | **Go** | **✗ VULNERABLE** | [Report](analysis/hashicorp-raft-analysis.md) |
+| **raft-java** | **1,234** | **Java** | **✗ VULNERABLE** | [Report](analysis/raft-java.md) |
+| **raft-rs (TiKV)** | **3,224** | **Rust** | **✗ VULNERABLE** | [Report](analysis/raft-rs.md) |
+| **redisraft** | **841** | **C** | **✗ VULNERABLE** | [Report](analysis/redisraft.md) |
+| **willemt/raft** | **1,160** | **C** | **✗ VULNERABLE** | [Report](analysis/willemt-raft.md) |
+| eliben/raft | 1,232 | Go | N/A | [Report](analysis/eliben-raft.md) |
 
 
 ## 🎓 Key Takeaways
@@ -66,12 +66,12 @@ When a node is removed and re-added to a cluster within the same term, delayed A
 ### Most Popular Implementations
 
 | Implementation | Stars | Status | Analysis |
-|----------------|-------|--------|----------|
+|----------------|------:|--------|----------|
 | braft | 4,174 | ✓ PROTECTED | [Report](analysis/braft.md) |
+| sofa-jraft | 3,762 | ✓ PROTECTED | [Report](analysis/sofa-jraft.md) |
 | dragonboat | 5,262 | ✗ VULNERABLE | [Report](analysis/dragonboat.md) |
 | hashicorp/raft | 8,826 | ✗ VULNERABLE | [Report](analysis/hashicorp-raft.md) |
 | raft-rs (TiKV) | 3,224 | ✗ VULNERABLE | [Report](analysis/raft-rs.md) |
-| sofa-jraft | 3,762 | ✓ PROTECTED | [Report](analysis/sofa-jraft.md) |
 
 ### Protection Mechanisms
 
