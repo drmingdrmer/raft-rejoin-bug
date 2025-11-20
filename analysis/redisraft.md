@@ -15,7 +15,7 @@ RedisRaft is vulnerable to the replication session isolation bug due to **msg_id
 
 The response handler has a critical missing NULL check:
 
-**File**: `src/raft.c:888-893`
+File: [`src/raft.c:888-893`](https://github.com/RedisLabs/redisraft/blob/master/src/raft.c#L888-L893)
 
 ```c
 static void handleAppendEntriesResponse(
@@ -42,7 +42,7 @@ The code doesn't check if `raft_node` is NULL before using it.
 
 RedisRaft uses willemt/raft library, which has broken stale detection:
 
-**File**: `deps/raft/src/raft_node.c:40-56`
+File: [`deps/raft/src/raft_node.c:40-56`](https://github.com/RedisLabs/redisraft/blob/master/deps/raft/src/raft_node.c#L40-L56)
 
 ```c
 raft_node_t* raft_node_new(void* udata, int id)
@@ -68,7 +68,7 @@ When a node rejoins, `match_msgid = 0` causes the stale detection to fail.
 
 The stale detection logic in willemt/raft fails with zero state:
 
-**File**: `deps/raft/src/raft_server.c:725-747`
+File: [`deps/raft/src/raft_server.c:725-747`](https://github.com/RedisLabs/redisraft/blob/master/deps/raft/src/raft_server.c#L725-L747)
 
 ```c
 static int raft_msg_entry_response_committed(
