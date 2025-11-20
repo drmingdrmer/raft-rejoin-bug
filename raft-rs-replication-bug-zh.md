@@ -1,6 +1,12 @@
-# raft-rs 成员变更期间的 replication progress 破坏问题
+# Raft 成员变更期间的 replication progress 破坏问题
 
-raft-rs 是 TiKV 使用的 Raft 实现，在 replication progress 跟踪中存在一个 bug。当节点在同一个 term 内被移除又重新加入集群时，问题就会出现。这个 bug 的核心在于：来自旧成员配置的延迟 AppendEntries response 会破坏 Leader 对节点 replication progress 的记录，导致 Leader 陷入无限重试循环。虽然这会带来运维上的困扰——资源持续消耗、节点无法追上集群进度，但好在数据安全性不会受到影响。
+在 Raft 集群运维中，存在一个容易被忽视的 bug：当节点在同一个 term 内被移除又重新加入集群时，来自旧成员配置的延迟 AppendEntries response 可能会破坏 Leader 对该节点 replication progress 的跟踪，导致 Leader 陷入无限重试循环。
+
+这个问题的根源在于缺少 **replication session 隔离机制**。当同一个节点在不同时间加入集群时，应该被视为不同的 replication session，但如果缺少显式的 session 标识，Leader 就无法区分 response 来自哪个 session。结果就是旧 session 的延迟 response 错误地更新了新 session 的 progress 记录。
+
+虽然这会带来运维上的困扰——资源持续消耗、节点无法追上集群进度，但好在 Raft 的 commit 协议保证了数据安全性不会受到影响。
+
+本文将以 TiKV 使用的 Raft 实现 raft-rs 为例，详细分析这个 bug 的触发条件、影响范围以及解决方案。
 
 > 完整的分析以及对其他 Raft 实现的调研，可以在 [Raft Rejoin Bug Survey](https://github.com/drmingdrmer/raft-rejoin-bug) 找到
 
