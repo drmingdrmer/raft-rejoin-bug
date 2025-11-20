@@ -15,7 +15,7 @@ willemt/raft is vulnerable to the replication session isolation bug due to **ins
 
 The response handler attempts to detect stale messages but fails on rejoin:
 
-**File**: `src/raft_server.c:275-349`
+File: [`src/raft_server.c:275-349`](https://github.com/willemt/raft/blob/master/src/raft_server.c#L275-L349)
 
 ```c
 int raft_recv_appendentries_response(
@@ -44,7 +44,7 @@ int raft_recv_appendentries_response(
 
 The stale detection function has a critical flaw:
 
-**File**: `src/raft_server.c:725-747` (inferred from behavior)
+File: [`src/raft_server.c:725-747`](https://github.com/willemt/raft/blob/master/src/raft_server.c#L725-L747) (inferred from behavior)
 
 ```c
 static int raft_msg_entry_response_committed(
@@ -76,7 +76,7 @@ When `match_msgid = 0` (fresh node), the function incorrectly returns "not stale
 
 When a node rejoins, all state including `match_msgid` is zeroed:
 
-**File**: `src/raft_node.c:39-51`
+File: [`src/raft_node.c:39-51`](https://github.com/willemt/raft/blob/master/src/raft_node.c#L39-L51)
 
 ```c
 raft_node_t* raft_node_new(void* udata, int id)
@@ -102,7 +102,7 @@ The `calloc()` call zeros the entire structure, setting `match_msgid = 0`.
 
 The message format includes `msg_id` but it's not properly validated:
 
-**File**: `include/raft.h:185-203`
+File: [`include/raft.h:185-203`](https://github.com/willemt/raft/blob/master/include/raft.h#L185-L203)
 
 ```c
 typedef struct {
