@@ -1,5 +1,10 @@
 # sofa-jraft Replication Progress Analysis
 
+**Repository**: https://github.com/sofastack/sofa-jraft
+**Stars**: 3,762
+**Language**: Java
+**Status**: ✓ PROTECTED
+
 ## Conclusion
 
 **sofa-jraft does NOT have the replication progress corruption bug found in raft-rs.**
@@ -10,7 +15,7 @@ sofa-jraft implements a version-based session isolation mechanism that prevents 
 
 ### Version Field
 
-Location: `Replicator.java:131`
+File: [`jraft-core/src/main/java/com/alipay/sofa/jraft/core/Replicator.java:131`](https://github.com/sofastack/sofa-jraft/blob/master/jraft-core/src/main/java/com/alipay/sofa/jraft/core/Replicator.java#L131)
 
 ```java
 private int version = 0;  // Replicator state reset version
@@ -31,7 +36,7 @@ void resetInflights() {
 
 ### Response Validation
 
-Location: `Replicator.java:1274`
+File: [`jraft-core/src/main/java/com/alipay/sofa/jraft/core/Replicator.java:1274`](https://github.com/sofastack/sofa-jraft/blob/master/jraft-core/src/main/java/com/alipay/sofa/jraft/core/Replicator.java#L1274)
 
 When an RPC response arrives, sofa-jraft validates the version:
 
@@ -58,8 +63,9 @@ static void onRpcReturned(final ThreadId id, final RequestType reqType,
 
 When sending an AppendEntries request, the current version is captured:
 
+File: [`jraft-core/src/main/java/com/alipay/sofa/jraft/core/Replicator.java:689`](https://github.com/sofastack/sofa-jraft/blob/master/jraft-core/src/main/java/com/alipay/sofa/jraft/core/Replicator.java#L689)
+
 ```java
-// Location: Replicator.java:689
 private void sendEntries(final long nextSendingIndex) {
     // ...
     final int stateVersion = this.version;  // Capture current version
@@ -82,7 +88,7 @@ private void sendEntries(final long nextSendingIndex) {
 
 ### Node Removal
 
-Location: `ReplicatorGroupImpl.java`
+File: [`jraft-core/src/main/java/com/alipay/sofa/jraft/core/ReplicatorGroupImpl.java`](https://github.com/sofastack/sofa-jraft/blob/master/jraft-core/src/main/java/com/alipay/sofa/jraft/core/ReplicatorGroupImpl.java)
 
 ```java
 public boolean stopReplicator(final PeerId peer) {
@@ -128,23 +134,13 @@ T5   | Response validation:                        | Response IGNORED ✓
      | LOG.debug("ignored old version response")   |
 ```
 
-## Comparison with raft-rs
-
-| Aspect | raft-rs | sofa-jraft |
-|--------|---------|------------|
-| Session identification | No explicit mechanism | `version` field |
-| Progress structure lifecycle | Deleted and recreated | Entire Replicator destroyed/created |
-| Response validation | Only term check | Term + version check |
-| Stale response handling | Incorrectly applied | Explicitly ignored |
-| Bug vulnerability | ✗ Vulnerable | ✓ Protected |
-
 ## Technical Details
 
 ### Version Increment Triggers
 
 The `version` field is incremented when:
 
-1. **`resetInflights()` is called** (line 1387)
+1. **`resetInflights()` is called** ([line 1387](https://github.com/sofastack/sofa-jraft/blob/master/jraft-core/src/main/java/com/alipay/sofa/jraft/core/Replicator.java#L1387))
    - Clears in-flight requests
    - Resets sequence numbers
    - Increments version
