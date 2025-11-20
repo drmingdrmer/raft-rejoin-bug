@@ -83,6 +83,14 @@ pub fn maybe_update(&mut self, n: u64) -> bool {
 |      | Infinite loop begins...                       |
 ```
 
+让我们详细解释一下每个时间点发生了什么：
+
+- **T1**: 此时集群成员是 {a,b,c}，Leader 向节点 C 发送 AppendEntries(index=1)。但是这个 response 在网络上遇到了延迟，迟迟没有到达。
+- **T2**: 节点 C 被从集群中移除，成员变为 {a,b}。Leader 删除了 Progress[C] 记录。
+- **T3**: 节点 C 重新加入集群，成员恢复为 {a,b,c}。Leader 为节点 C 创建了一个全新的 Progress 记录，此时 matched=0。
+- **T4**: 那个在 T1 的延迟 response 终于到达了。Leader 找到了节点 C 的 Progress 记录（但这是 T3 新建的），因为 index=1 > matched=0，所以更新了 matched=1。问题就出在这里！
+- **T5**: Leader 根据 matched=1 计算出 next_idx=2，发送 AppendEntries(prev_index=1)。但节点 C 的 log 是空的，没有 index 1，于是拒绝。Leader 想递减 next_idx，但因为 rejected(1) == matched(1)，拒绝递减。无限循环开始。
+
 ### T4 的 response 处理
 
 到了时间 T4，那个在 T1 发出、在网络上延迟许久的 response 终于到达了。Leader 收到后会这样处理：
@@ -104,6 +112,16 @@ fn handle_append_response(&mut self, m: &Message) {
         return;
     }
     // ...
+}
+
+// 来自 raft-rs/src/tracker/progress.rs
+pub fn maybe_update(&mut self, n: u64) -> bool {
+    let need_update = self.matched < n;  // 只检查单调性
+    if need_update {
+        self.matched = n;  // 接受更新！
+        self.resume();
+    }
+    need_update
 }
 ```
 
