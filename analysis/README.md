@@ -40,21 +40,4 @@ These implementations are vulnerable to the bug and require fixes:
 
 ## Analysis Structure
 
-Each analysis report contains:
-
-**For Vulnerable Implementations**:
-- Vulnerability summary
-- How the bug occurs (with code references and line numbers)
-- Attack scenario timeline
-- Root cause analysis
-- Recommended solutions (multiple approaches)
-- Impact assessment
-- References to source code
-
-**For Protected Implementations**:
-- Protection summary
-- How the protection works (with code references and line numbers)
-- Protection flow timeline
-- Key design principles
-- Benefits and comparison with other approaches
-- References to source code
+Each analysis report includes vulnerability or protection summary, detailed explanation of how the bug occurs or how protection works (with code references and line numbers), attack or protection flow timeline, root cause or design principles, and references to source code. Vulnerable implementation reports also include recommended solutions and impact assessment, while protected implementation reports include benefits and comparisons with other approaches.
