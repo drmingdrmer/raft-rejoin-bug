@@ -24,8 +24,9 @@ Leader 靠这些 response 来掌握每个 Follower 的复制情况。它用 `mat
 
 raft-rs 使用 Progress 结构跟踪每个 follower 节点的 replication progress：
 
+File: [`src/tracker/progress.rs`](https://github.com/tikv/raft-rs/blob/master/src/tracker/progress.rs#L8-L56)
+
 ```rust
-// 来自 raft-rs/src/tracker/progress.rs
 pub struct Progress {
     pub matched: u64,      // 已知已复制的最高 log index
     pub next_idx: u64,     // 下一个要发送的 log index
@@ -36,8 +37,9 @@ pub struct Progress {
 
 这里的 `matched` 字段记录的是已成功复制到该 follower 的最高 log index。每当 Leader 收到成功的 AppendEntries response，就会更新这个字段：
 
+File: [`src/tracker/progress.rs:136-148`](https://github.com/tikv/raft-rs/blob/master/src/tracker/progress.rs#L136-L148)
+
 ```rust
-// 来自 raft-rs/src/tracker/progress.rs
 pub fn maybe_update(&mut self, n: u64) -> bool {
     let need_update = self.matched < n;  // 只检查单调性
     if need_update {
@@ -95,8 +97,9 @@ pub fn maybe_update(&mut self, n: u64) -> bool {
 
 到了时间 T4，那个在 T1 发出、在网络上延迟许久的 response 终于到达了。Leader 收到后会这样处理：
 
+File: [`src/raft.rs`](https://github.com/tikv/raft-rs/blob/master/src/raft.rs) (response 处理逻辑)
+
 ```rust
-// 来自 raft-rs/src/raft.rs
 fn handle_append_response(&mut self, m: &Message) {
     // 查找 progress 记录
     let pr = match self.prs.get_mut(m.from) {
@@ -113,8 +116,11 @@ fn handle_append_response(&mut self, m: &Message) {
     }
     // ...
 }
+```
 
-// 来自 raft-rs/src/tracker/progress.rs
+File: [`src/tracker/progress.rs:136-148`](https://github.com/tikv/raft-rs/blob/master/src/tracker/progress.rs#L136-L148)
+
+```rust
 pub fn maybe_update(&mut self, n: u64) -> bool {
     let need_update = self.matched < n;  // 只检查单调性
     if need_update {
@@ -133,8 +139,9 @@ pub fn maybe_update(&mut self, n: u64) -> bool {
 
 再看 raft-rs 的 Message 结构，你会发现它只包含 term 信息：
 
+File: [`proto/proto/eraftpb.proto:71-98`](https://github.com/tikv/raft-rs/blob/master/proto/proto/eraftpb.proto#L71-L98)
+
 ```protobuf
-// 来自 raft-rs/proto/proto/eraftpb.proto
 message Message {
     MessageType msg_type = 1;
     uint64 to = 2;
@@ -154,8 +161,9 @@ message Message {
 
 一旦 Leader 错误地把 `matched` 设成了 1，麻烦就大了。来看看会发生什么：
 
+File: [`src/tracker/progress.rs`](https://github.com/tikv/raft-rs/blob/master/src/tracker/progress.rs) (递减逻辑)
+
 ```rust
-// 来自 raft-rs/src/tracker/progress.rs
 pub fn maybe_decr_to(&mut self, rejected: u64, match_hint: u64, ...) -> bool {
     if self.state == ProgressState::Replicate {
         // 如果 rejected <= matched 则无法递减
