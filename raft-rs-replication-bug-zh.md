@@ -131,13 +131,13 @@ pub fn maybe_update(&mut self, n: u64) -> bool {
 }
 ```
 
-这时候问题就来了：Leader 确实找到了节点 C 的 Progress 记录，但这是 T3 时新创建的那个。因为 message 的 term 和当前 term 都是 5，term 检查通过了，于是 Leader 就用这个陈旧的 index 值更新了 progress。
+这时候问题就来了：Leader 确实找到了节点 C 的 Progress 记录，但这是 T3 时新创建的那个。因为 message 的 term 和当前 term 都是 5，通过了 [`step()` 函数](https://github.com/tikv/raft-rs/blob/master/src/raft.rs#L1346-L1478)里的 term 检查，于是 Leader 就用这个陈旧的 index 值更新了 progress。
 
 ## 根本原因分析
 
-这个 bug 的根源在于 **Raft 中的成员变更并不要求 term 发生变化**。也就是说，Leader 完全可以在同一个 term 内把一个节点移除，然后再把它加回来。成员变更只是一个特殊的 log entry，和其他 entry 一样通过正常的复制流程传播。
+这个 bug 的根源在于 **request-response 缺少 replication session 的标识**。当节点 C 在 T2 被移除又在 T3 重新加入时，这应该是两个不同的 replication session——但 Leader 没有办法区分 T1 发出的 request 对应的 response 和 T3 之后发出的 request 对应的 response。
 
-再看 raft-rs 的 Message 结构，你会发现它只包含 term 信息：
+看一下 raft-rs 的 Message 结构：
 
 File: [`proto/proto/eraftpb.proto:71-98`](https://github.com/tikv/raft-rs/blob/master/proto/proto/eraftpb.proto#L71-L98)
 
@@ -146,20 +146,20 @@ message Message {
     MessageType msg_type = 1;
     uint64 to = 2;
     uint64 from = 3;
-    uint64 term = 4;        // 只有 term，没有 membership version！
+    uint64 term = 4;        // 只有 term，没有 session 标识！
     uint64 log_term = 5;
     uint64 index = 6;
     // ...
 }
 ```
 
-问题就在这里：既然没有办法区分 message 属于哪个 membership 配置，Leader 也就无从判断收到的 response 是来自当前 session 还是之前的 session。而 term 检查 `if m.term == self.term` 又顺利通过了，因为旧 session 和新 session 都在 term 5 里发生。
+Message 里只有 `from` 字段标识发送节点，但同一个节点 ID 在不同时间加入集群时，应该被视为不同的 replication session。Leader 需要能够区分：这个 response 是来自节点 C 第一次加入时的 session，还是第二次加入时的 session？但现在的 Message 结构无法提供这个信息。
 
-## 影响分析
+## 影响
 
 ### 无限重试循环
 
-一旦 Leader 错误地把 `matched` 设成了 1，麻烦就大了。来看看会发生什么：
+一旦 Leader 错误地把 `matched` 设成了 1：
 
 File: [`src/tracker/progress.rs`](https://github.com/tikv/raft-rs/blob/master/src/tracker/progress.rs) (递减逻辑)
 
@@ -176,21 +176,18 @@ pub fn maybe_decr_to(&mut self, rejected: u64, match_hint: u64, ...) -> bool {
 }
 ```
 
-现在 Leader 发送 AppendEntries，`prev_log_index=1`，但节点 C 的日志是空的，根本没有 index 1 的条目。所以节点 C 拒绝了这个请求。Leader 想要递减 `next_idx` 来重试更早的位置，但问题来了：因为 `rejected (1) == matched (1)`，递减逻辑直接返回 false，拒绝递减。于是 Leader 只好再发一遍同样的请求，节点 C 再拒绝一次，如此往复，形成了一个死循环。
+现在 Leader 发送 AppendEntries，会设置 `prev_log_index=1`，但节点 C 的 log 是空的，没有 index 1 的条目。所以节点 C 拒绝了这个请求。Leader 想要递减 `next_idx` 来重试更早的位置，但问题来了：因为 `rejected (1) == matched (1)`，递减逻辑直接返回 false，拒绝递减。于是 Leader 只好再发一遍同样的请求，节点 C 再拒绝一次，如此往复，形成了一个死循环。
 
-### 运维影响
 
-这个 bug 会带来一系列运维上的麻烦。首先是资源耗尽的问题：AppendEntries-拒绝的循环会一直消耗 CPU 和网络带宽。其次，运维人员看到日志里全是拒绝消息，比如 `rejected msgApp [logterm: 5, index: 1] from leader`，第一反应会以为是数据损坏了。监控系统也会因为检测到高拒绝率而发出警报，可能半夜把值班工程师叫起来排查一个并不存在的数据丢失问题。最要命的是，这个节点没法自己恢复，必须手动重启或干预才能解决，这就降低了集群的整体容错能力。
+## 数据仍是安全的
 
-## 为什么数据保持安全
-
-虽然运维上一片混乱，但有个好消息：数据的完整性不会受影响。Raft 的安全机制保证了即使 progress 跟踪出了问题，集群也不会丢失已经 commit 的数据。
+但有个好消息：数据的完整性不会受影响。Raft 的安全机制保证了即使 progress 跟踪出了问题，集群也不会丢失已经 commit 的数据。
 
 原因在于 commit index 的计算仍然是正确的。即便 Leader 误以为节点 C 的 `matched=1`，它计算 commit index 时依然是基于实际的 quorum。比如说节点 A 的 matched=100，节点 B 的 matched=100，节点 C 的 matched=1（虽然不对，但也没关系）。Quorum 看的是 A 和 B 的 matched=100，所以 commit index 会被正确计算为 100。加上 Raft 的 overlapping quorum 特性，任何新选出的 Leader 都必然包含所有已 commit 的 entry，数据安全就这样得到了保障。
 
-## 解决方案：三种方法
+## 解决方案
 
-### 方案 1：添加 membership version（推荐）
+### 方案 1：添加 membership version
 
 最直接的办法就是在 message 里加上 membership 配置的 version：
 
@@ -242,3 +239,5 @@ pub struct Progress {
 不过值得庆幸的是，因为 Raft 在 commit index 计算和 overlapping quorum 机制上的保障，这个 bug 并不会危及数据安全。它带来的主要是运维层面的问题——表面上看起来像数据损坏，可能让运维团队花大力气去排查一个并不存在的数据丢失问题。
 
 对于生产环境的 Raft 实现，建议引入显式的 session 管理机制。可以通过 membership version 或者 generation counter 来实现。其中最推荐的做法是在 message 里添加 membership_log_id 字段，这样 Leader 就能清楚地分辨出 response 来自哪个 membership 配置了。
+
+
