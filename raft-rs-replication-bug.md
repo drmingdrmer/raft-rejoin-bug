@@ -1,6 +1,12 @@
-# Replication Progress Corruption in raft-rs During Membership Changes
+# Replication Progress Corruption During Membership Changes in Raft
 
-raft-rs is TiKV's Raft implementation, and it has a bug in how it tracks replication progress. The problem shows up when a node gets removed and then re-added to the cluster within the same term. What happens is that delayed AppendEntries responses from the old membership configuration can corrupt the leader's progress tracking for that node, leading to infinite retry loops. The good news is that data safety isn't compromised, but it does create operational headaches—resource exhaustion and nodes that can't catch up without manual intervention.
+In Raft cluster operations, there's an easily overlooked bug: when a node is removed and then re-added to the cluster within the same term, delayed AppendEntries responses from the old membership configuration can corrupt the leader's replication progress tracking for that node, causing the leader to enter an infinite retry loop.
+
+The root cause is the lack of a **replication session isolation mechanism**. When the same node joins the cluster at different times, these should be treated as different replication sessions. However, without explicit session identifiers, the leader cannot distinguish which session a response belongs to. The result is that delayed responses from old sessions incorrectly update the progress records of new sessions.
+
+While this creates operational challenges—continuous resource consumption and nodes unable to catch up with the cluster—the good news is that Raft's commit protocol ensures data safety remains intact.
+
+This article uses raft-rs, the Raft implementation used by TiKV, as a case study to analyze this bug's trigger conditions, impact, and potential solutions.
 
 > Complete analysis and survey of other Raft implementations can be found in the [Raft Rejoin Bug Survey](https://github.com/drmingdrmer/raft-rejoin-bug)
 
@@ -155,7 +161,7 @@ The leader sends AppendEntries with `prev_log_index=1`, but node C's log is empt
 
 ### Operational Impact
 
-This bug creates a series of operational problems. First, there's resource exhaustion: the continuous AppendEntries-rejection cycle keeps consuming CPU and network bandwidth. Second, operators looking at the logs see continuous rejection messages like `rejected msgApp [logterm: 5, index: 1] from leader`, which looks like data corruption at first glance. Monitoring systems will detect the high rejection rate and may page on-call engineers in the middle of the night to investigate a data loss problem that doesn't actually exist. Worst of all, the node can't recover on its own—you'll need to manually restart it or intervene, which reduces the cluster's overall fault tolerance.
+This bug creates a series of operational problems. First, there's resource exhaustion: the continuous AppendEntries-rejection cycle keeps consuming CPU and network bandwidth.
 
 ## Why Data Remains Safe
 
