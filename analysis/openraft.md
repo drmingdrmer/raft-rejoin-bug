@@ -29,7 +29,7 @@ where C: RaftTypeConfig
 
 A replication session is uniquely identified by:
 - `leader_vote`: The committed vote of the leader (term + leader ID)
-- `membership_log_id`: The log ID where the membership configuration was committed
+- `membership_log_id`: The log ID where the membership configuration was in use.
 
 ### 2. Session ID Assignment at Spawn Time
 
@@ -134,30 +134,30 @@ If either check fails, the message is discarded.
 ### Timeline Example
 
 ```
-Timeline | Event                                    | Session ID
----------|------------------------------------------|--------------------
-T1       | Node C in cluster                        | Session1:
-         | Leader vote: term=5, leader=1           | (vote=(5,1),
-         | Membership log_id: (term=3, index=10)   |  membership=(3,10))
-         | Send AppendEntries (network delay)      | (in-flight)
-         |                                          |
-T2       | Node C removed from cluster              | Session1 ends
-         | Membership log_id: (term=5, index=20)   | Replication task
-         | Replication stream terminated           | terminated
-         |                                          |
-T3       | Node C rejoins cluster                   | Session2:
-         | Membership log_id: (term=5, index=25)   | (vote=(5,1),
-         | New replication stream spawned          |  membership=(5,25))
-         | Session ID: (vote=(5,1), membership=(5,25)) | New task started
-         |                                          |
-T4       | Delayed response arrives                 | Validation:
-         | Session ID: (vote=(5,1), membership=(3,10)) | vote✓ (5,1)=(5,1)
-         | Validate against current session:       | membership✗
-         | - vote matches: (5,1) == (5,1) ✓        | (3,10)!=(5,25)
-         | - membership mismatches: (3,10) != (5,25) ✗ | Response REJECTED
-         |                                          |
-T5       | Normal replication continues             | Session2 continues
-         | All responses have session=(5,1,5,25)   | Clean state
+| Timeline | Event                                         | Session ID
+|----------|-----------------------------------------------|--------------------
+| T1       | Node C in cluster                             | Session1:
+|          |   Leader vote: term=5, leader=1               | (vote=(5,1),
+|          |   Membership log_id: (term=5, index=10)       |  membership=(5,10))
+|          |   Send AppendEntries (network delay)          | (in-flight)
+|          |                                               |
+| T2       | Node C removed from cluster                   | Session1 ends
+|          |   Membership log_id: (term=5, index=20)       | Replication task
+|          |   Replication stream terminated               | terminated
+|          |                                               |
+| T3       | Node C rejoins cluster                        | Session2:
+|          |   Membership log_id: (term=5, index=25)       | (vote=(5,1),
+|          |  New replication stream spawned               |  membership=(5,25))
+|          |  Session ID: (vote=(5,1), membership=(5,25))  | New task started
+|          |                                               |
+| T4       | Delayed response arrives                      | Validation:
+|          |   Session ID: (vote=(5,1), membership=(5,10)) | vote✓ (5,1)=(5,1)
+|          |   Validate against current session:           | membership✗
+|          |   - vote matches: (5,1) == (5,1) ✓            | (5,10)!=(5,25)
+|          |   - membership mismatches: (5,10) != (5,25) ✗ | Response REJECTED
+|          |                                               |
+| T5       | Normal replication continues                  | Session2 continues
+|          |   All responses have session=(5,25)           | Clean state
 ```
 
 ### Key Protection Properties
