@@ -239,27 +239,6 @@ pub struct Progress {
 
 在 message 中包含 generation，并在 response 时验证它。这比方案 1 更轻量，但需要仔细管理 generation。
 
-### 方案 3：更严格的 log 验证
-
-更新 progress 时，验证 response 的 log term 与本地 log 匹配：
-
-```rust
-pub fn maybe_update(&mut self, n: u64, log_term: u64) -> bool {
-    // 验证 log term 与我们的本地 log 匹配
-    if self.raft_log.term(n) != log_term {
-        return false;  // 拒绝陈旧更新
-    }
-
-    let need_update = self.matched < n;
-    if need_update {
-        self.matched = n;
-        self.resume();
-    }
-    need_update
-}
-```
-
-这可以捕获不一致，但需要额外的 log 查找，并可能存在边缘情况。
 
 ## 总结
 
