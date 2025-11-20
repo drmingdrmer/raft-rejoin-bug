@@ -3,8 +3,6 @@
 Survey of 17 popular Raft implementations analyzing their vulnerability to a replication progress corruption bug during membership changes.
 
 **Detailed Analysis**:
-- [English: Replication Progress Corruption in raft-rs](raft-rs-replication-bug.md) - In-depth explanation using raft-rs as example
-- [中文：raft-rs 成员变更期间的 replication progress 破坏问题](raft-rs-replication-bug-zh.md) - 以 raft-rs 为例的详细分析
 - [Survey Report](SURVEY-REPORT.md) - Complete survey methodology and solutions
 
 ## The Bug
