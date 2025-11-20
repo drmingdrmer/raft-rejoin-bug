@@ -60,38 +60,18 @@ T4       | Delayed response arrives                 | C: matched=50 ❌
          | matched set to 50, next_idx to 51        |
          |                                          |
 T5       | Leader sends AppendEntries(prev=50)      |
-         | Node C rejects (actual log < 50)         |
-         | Leader decrements next_idx               |
-         | But delayed responses keep resetting it! |
-         | Infinite loop continues                  |
+         | Node C rejects (doesn't have index 50)   |
+         | Leader retries with prev=50 again        |
+         | Infinite rejection loop                  |
 ```
-
-### Why Monotonicity Check Is Insufficient
-
-After node C rejoins:
-- New `Progress[C]` has `matched=0`
-- Delayed response arrives with `index=50`
-- `maybe_update(50)` checks: `0 < 50` → **true** ✓
-- Progress corrupted to `matched=50` even though C's actual log is empty!
 
 ### Root Cause
 
-1. **No session isolation**: `Progress` struct lacks session identifier
-2. **Monotonicity check insufficient**: Works within a session, fails across session boundaries
-3. **Term-only validation**: Cannot distinguish messages from different membership configurations within same term
-4. **No request-response correlation**: No mechanism to match responses with sent requests
+After node C rejoins, the new `Progress[C]` has `matched=0`. When the delayed response arrives with `index=50`, `maybe_update(50)` checks `0 < 50` and accepts it, corrupting progress to `matched=50` even though C's actual log is empty. The fundamental problem is that `Progress` lacks a session identifier—the monotonicity check (`matched < n`) works within a session but fails across session boundaries. Term-only validation cannot distinguish messages from different membership configurations within the same term, and there's no request-response correlation mechanism.
 
 ### Impact
 
-**Operational problems**:
-- Infinite retry loops - Leader sends wrong log indices
-- Resource exhaustion - Continuous failed replication attempts
-- TiKV nodes unable to replicate data
-- Manual restart required to recover
-
-**Data safety**:
-- ✓ Not compromised - Raft's commit protocol still ensures safety
-- The bug causes operational issues, not data loss
+The bug causes infinite retry loops, resource exhaustion, and requires manual restart to recover. TiKV nodes become unable to replicate data. However, data safety is not compromised—Raft's commit protocol still ensures safety, so this is an operational issue, not data loss.
 
 ## How to Fix It in raft-rs
 
@@ -133,93 +113,16 @@ impl Progress {
 }
 ```
 
-**Why this works**:
-- When node C is removed at T2, `Progress[C]` is deleted
-- When node C rejoins at T3, new `Progress[C]` created with `session_version=0`
-- First `reset()` call increments to `session_version=1`
-- At T4, delayed response has `response_version=0` (from old session)
-- Validation fails: `0 != 1` → response rejected ✓
+**Why this works**: When node C is removed at T2, `Progress[C]` is deleted. When node C rejoins at T3, a new `Progress[C]` is created with `session_version=0`, and the first `reset()` call increments it to `session_version=1`. At T4, when the delayed response arrives with `response_version=0` (from the old session), the validation fails because `0 != 1`, and the response is rejected.
 
-**Benefits**:
-- No protocol changes needed
-- Minimal code changes
-- Zero performance overhead
 
 ## General Solutions for Other Implementations
 
-The version counter approach shown above can be adapted to any implementation. Other protection mechanisms found in surveyed implementations:
-
-### Membership Log ID Tracking
-
-Include the log ID where membership was committed in session identifier. Explicit session boundary at membership changes.
-
-### CallId/Request Correlation
-
-Assign unique ID to each request, validate responses against in-flight queue. Leverages RPC framework capabilities.
-
-### Configuration Membership Validation
-
-Validate response sender is still in current configuration. Natural session boundary, but requires careful handling of rapid changes.
-
-## Implementation Analysis
-
-For detailed analysis of how each implementation handles (or fails to handle) this bug, see:
-
-### Protected Implementations
-
-- [Apache Ratis](analysis/apache-ratis.md) - CallId matching with RequestMap
-- [NuRaft](analysis/nuraft.md) - RPC client ID validation
-- [RabbitMQ Ra](analysis/rabbitmq-ra.md) - Cluster membership validation
-- [braft](analysis/braft.md) - CallId-based session tracking
-- [canonical/raft](analysis/canonical-raft.md) - Configuration membership check
-- [OpenRaft](analysis/openraft.md) - Vote + Membership log ID
-- [sofa-jraft](analysis/sofa-jraft-analysis.md) - Version counter
-
-### Vulnerable Implementations
-
-- [LogCabin](analysis/logcabin.md) - Insufficient epoch validation
-- [PySyncObj](analysis/pysyncobj.md) - Zero validation
-- [dragonboat](analysis/dragonboat.md) - Term-only validation insufficient
-- [etcd-io/raft](analysis/etcd-raft.md) - No session validation
-- [hashicorp/raft](analysis/hashicorp-raft-analysis.md) - No session isolation
-- [raft-java](analysis/raft-java.md) - No request-response correlation
-- [raft-rs (TiKV)](analysis/raft-rs.md) - Monotonicity check insufficient
-- [redisraft](analysis/redisraft.md) - msg_id resets on rejoin
-- [willemt/raft](analysis/willemt-raft.md) - Insufficient stale detection
-
-### Not Applicable
-
-- [eliben/raft](analysis/eliben-raft.md) - No membership changes (educational)
-
-## Recommendations
-
-For vulnerable implementations:
-
-1. **Immediate**: Add version counter (as shown in raft-rs fix) - minimal changes, no protocol modifications
-2. **Better**: Implement membership log ID tracking - explicit session isolation
-3. **Best**: Combine with RPC framework call IDs - comprehensive protection
-
-For new implementations:
-
-- Design with explicit session identifiers from the start
-- Include membership_log_id or version counter in replication session tracking
-- Validate all responses against current session before updating progress
+The version counter approach shown above can be adapted to any implementation. Other protection mechanisms found in surveyed implementations include: **membership log ID tracking** (include the log ID where membership was committed as session identifier), **CallId/request correlation** (assign unique ID to each request and validate responses against in-flight queue), and **configuration membership validation** (validate response sender is still in current configuration). See individual analysis reports for implementation details.
 
 ## Survey Methodology
 
-For each implementation, we analyzed:
-
-1. **Progress tracking** - How replication state is maintained
-2. **Message protocol** - Fields in AppendEntries requests/responses
-3. **Membership changes** - How progress is reset on rejoin
-4. **Response validation** - What checks are performed
-5. **Session isolation** - Mechanisms to distinguish sessions
-
-Analysis was performed through:
-- Source code review
-- Protocol message structure examination
-- Replication state management inspection
-- Response handler validation logic review
+For each implementation, we reviewed source code to analyze progress tracking structures, message protocols, membership change handling, and response validation logic. See individual analysis reports in [analysis/](analysis/) for details.
 
 ---
 
