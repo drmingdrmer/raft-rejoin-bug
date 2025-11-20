@@ -15,7 +15,7 @@ raft-java is vulnerable to the replication session isolation bug due to **comple
 
 The response handler performs zero validation on incoming responses:
 
-**File**: `RaftNode.java:255-294`
+File: [`RaftNode.java:255-294`](https://github.com/wenweihu86/raft-java/blob/master/raft-java-core/src/main/java/com/github/wenweihu86/raft/RaftNode.java#L255-L294)
 
 ```java
 public void onReceiveAppendEntriesResponse(RaftProto.AppendEntriesResponse response,
@@ -44,7 +44,7 @@ The implementation blindly trusts that any response with matching peer ID is val
 
 The implementation may reuse peer objects across sessions:
 
-**File**: `RaftNode.java:406-412`
+File: [`RaftNode.java:406-412`](https://github.com/wenweihu86/raft-java/blob/master/raft-java-core/src/main/java/com/github/wenweihu86/raft/RaftNode.java#L406-L412)
 
 ```java
 public void addPeer(Peer peer) {
