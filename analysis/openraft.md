@@ -180,33 +180,13 @@ Delayed response arrives → Session ID validation fails → Response discarded
 ## Benefits
 
 - **Membership-aware**: Explicitly tracks membership changes through log ID
-- **Type-safe**: Rust's type system ensures session_id is always included
-- **Zero overhead**: Session validation is a simple struct comparison
 - **No protocol changes**: Works entirely at application level
 - **Comprehensive**: Protects against both vote changes and membership changes
 
-## Comparison with Other Approaches
-
-| Approach | openraft | sofa-jraft | braft |
-|----------|----------|------------|-------|
-| Session identifier | Vote + Membership log ID | Version counter | RPC call ID |
-| Granularity | Per-session | Per-session | Per-request |
-| Protocol changes | No | No | No |
-| Membership awareness | Explicit | Implicit | Implicit |
-| Extra state | Two fields | One int | Queue |
-| Complexity | Low | Low | Medium |
-
-## Design Principles
-
-1. **Explicit over implicit**: Membership log ID makes session boundaries explicit
-2. **Compositional**: Combines vote (for leader changes) and membership_log_id (for config changes)
-3. **Defensive**: Every response carries its session context for validation
-4. **Fail-safe**: Unknown session IDs are automatically rejected
-
 ## References
 
-- Session ID structure: `openraft/src/replication/replication_session_id.rs:22-30`
-- Session creation: `openraft/src/core/raft_core.rs:844-850`
-- Progress message: `openraft/src/replication/response.rs:14-38`
-- Response validation: `openraft/src/core/raft_core.rs:1533-1536, 1716-1735`
-- Documentation: `openraft/src/docs/data/replication-session.md`
+- Session ID structure: [`openraft/src/replication/replication_session_id.rs:22-30`](https://github.com/databendlabs/openraft/blob/main/openraft/src/replication/replication_session_id.rs#L22-L30)
+- Session creation: [`openraft/src/core/raft_core.rs:844-850`](https://github.com/databendlabs/openraft/blob/main/openraft/src/core/raft_core.rs#L844-L850)
+- Progress message: [`openraft/src/replication/response.rs:14-38`](https://github.com/databendlabs/openraft/blob/main/openraft/src/replication/response.rs#L14-L38)
+- Response validation: [`openraft/src/core/raft_core.rs:1533-1536`](https://github.com/databendlabs/openraft/blob/main/openraft/src/core/raft_core.rs#L1533-L1536), [`1716-1735`](https://github.com/databendlabs/openraft/blob/main/openraft/src/core/raft_core.rs#L1716-L1735)
+- Documentation: [`openraft/src/docs/data/replication-session.md`](https://github.com/databendlabs/openraft/blob/main/openraft/src/docs/data/replication-session.md)
