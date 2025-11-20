@@ -116,30 +116,12 @@ T5       | Send new request with callId=1           | Map: {callId=1 -> req}
          | Normal replication continues             | Clean state
 ```
 
-## Key Design Principles
-
-1. **Explicit correlation**: Every request-response pair is explicitly matched
-2. **Per-appender isolation**: Each LogAppender instance is independent
-3. **Fail-safe rejection**: Unknown responses are logged and discarded
-4. **Counter-based IDs**: Simple incrementing counter for unique IDs
-
 ## Benefits
 
 - **Strong guarantee**: No false positives possible
 - **Clear semantics**: Request-response matching is explicit
 - **Debuggable**: Can track exactly which requests are pending
 - **No protocol changes**: Works at application level
-
-## Comparison with Other Approaches
-
-| Feature | Apache Ratis | braft | sofa-jraft |
-|---------|--------------|-------|------------|
-| Mechanism | CallId map | CallId queue | Version counter |
-| Storage | HashMap | Deque | Single int |
-| Validation | Map lookup | Queue search | Equality check |
-| Cleanup | Map clear | Queue clear | Counter increment |
-| Overhead | O(n) space | O(n) space | O(1) space |
-| Accuracy | Exact match | Exact match | Session-level |
 
 ## Additional Protection: Timeout Handling
 

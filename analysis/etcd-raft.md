@@ -15,7 +15,7 @@ etcd-io/raft is vulnerable to the replication session isolation bug due to **no 
 
 The response handler uses only the node ID to locate progress tracking:
 
-**File**: `raft.go:1370-1374`
+File: [`raft.go:1370-1374`](https://github.com/etcd-io/raft/blob/main/raft.go#L1370-L1374)
 
 ```go
 func (r *raft) handleAppendEntriesResponse(m pb.Message) {
@@ -48,7 +48,7 @@ The lookup `r.prs.Progress[m.From]` returns the current progress for that node I
 
 When membership changes occur, progress entries are deleted and re-created:
 
-**File**: `confchange/confchange.go:242`
+File: [`confchange/confchange.go:242`](https://github.com/etcd-io/raft/blob/main/confchange/confchange.go#L242)
 
 ```go
 func (c *Changer) applyConfChange(cfg ConfChangeI) (tracker.Config, tracker.ProgressMap, error) {
@@ -72,7 +72,7 @@ When a node rejoins, a fresh Progress entry is created with `Match: 0`, but ther
 
 Progress updates accept any higher index without session checks:
 
-**File**: `tracker/progress.go:205-213`
+File: [`tracker/progress.go:205-213`](https://github.com/etcd-io/raft/blob/main/tracker/progress.go#L205-L213)
 
 ```go
 func (pr *Progress) MaybeUpdate(n uint64) bool {
@@ -99,7 +99,7 @@ No validation is performed to check:
 
 The message format has only basic fields:
 
-**File**: `raftpb/raft.proto:71-98`
+File: [`raftpb/raft.proto:71-98`](https://github.com/etcd-io/raft/blob/main/raftpb/raft.proto#L71-L98)
 
 ```protobuf
 message Message {

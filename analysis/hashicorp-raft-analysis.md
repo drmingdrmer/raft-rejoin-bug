@@ -218,16 +218,6 @@ T5   | Leader sends AppendEntries(prev=50)         |
      | Infinite retry loop begins                  |
 ```
 
-## Comparison Table
-
-| Aspect | raft-rs | sofa-jraft | hashicorp/raft |
-|--------|---------|------------|----------------|
-| Session identification | No | Yes (`version` field) | No |
-| Progress lifecycle | Delete/recreate | Destroy/create new object | Delete/recreate |
-| Response validation | Only term | Term + version | Only term |
-| Stale response handling | Incorrectly applied | Explicitly ignored | Incorrectly applied |
-| Bug vulnerability | ✗ Vulnerable | ✓ Protected | ✗ Vulnerable |
-
 ## Why hashicorp/raft is Vulnerable
 
 1. **No session isolation mechanism**: Unlike sofa-jraft which has a `version` field that increments on reset, hashicorp/raft has no way to identify which replication session a response belongs to.

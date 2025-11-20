@@ -15,7 +15,7 @@ PySyncObj is vulnerable to the replication session isolation bug due to **zero v
 
 The response handler has absolutely no validation:
 
-**File**: `syncobj.py:987-1000`
+File: [`syncobj.py:987-1000`](https://github.com/bakwc/PySyncObj/blob/master/syncobj.py#L987-L1000)
 
 ```python
 def _onAppendEntriesResponse(self, nodeAddr, response):
@@ -49,7 +49,7 @@ The handler blindly trusts any response with a matching node address.
 
 Node management is simple dictionary operations:
 
-**File**: `syncobj.py:1322-1323` (Node removal)
+File: [`syncobj.py:1322-1323`](https://github.com/bakwc/PySyncObj/blob/master/syncobj.py#L1322-L1323) (Node removal)
 
 ```python
 def removeNode(self, nodeAddr):
@@ -58,7 +58,7 @@ def removeNode(self, nodeAddr):
     # Progress tracking deleted
 ```
 
-**File**: `syncobj.py:1309-1310` (Node addition)
+File: [`syncobj.py:1309-1310`](https://github.com/bakwc/PySyncObj/blob/master/syncobj.py#L1309-L1310) (Node addition)
 
 ```python
 def addNode(self, nodeAddr):

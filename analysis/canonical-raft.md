@@ -15,7 +15,7 @@ canonical/raft is protected against the replication session isolation bug throug
 
 Every AppendEntries response goes through strict configuration membership checking:
 
-**File**: `src/recv_append_entries_result.c:57-62`
+File: [`src/recv_append_entries_result.c:57-62`](https://github.com/canonical/raft/blob/master/src/recv_append_entries_result.c#L57-L62)
 
 ```c
 server = configurationGet(&r->configuration, id);
@@ -37,7 +37,7 @@ The `configurationGet()` function looks up the server in the current configurati
 
 The progress array is tightly coupled to the configuration:
 
-**File**: `src/replication.c`
+File: [`src/replication.c`](https://github.com/canonical/raft/blob/master/src/replication.c)
 
 The progress tracking array is rebuilt whenever the configuration changes:
 
@@ -104,48 +104,6 @@ T5       | Leader sends AppendEntries(prev=0)       |
          | Node C accepts (correct state)           |
          | Normal replication continues             | ✓ No corruption
 ```
-
-## Key Design Principles
-
-### 1. Configuration as Single Source of Truth
-
-The configuration is the authoritative source for cluster membership. All operations validate against the current configuration:
-
-- Progress tracking derives from configuration
-- Response validation checks configuration
-- No separate membership tracking needed
-
-### 2. Strict Entry Point Validation
-
-All external inputs are validated at the entry point:
-
-```c
-// Every response handler starts with:
-server = configurationGet(&r->configuration, id);
-if (server == NULL) {
-    tracef("unknown server -> ignore");
-    return 0;
-}
-```
-
-This defensive pattern prevents stale data from entering the system.
-
-### 3. Progress-Configuration Coupling
-
-The progress array is tightly coupled to the configuration:
-
-- 1:1 correspondence between configuration servers and progress entries
-- Progress array rebuilt on configuration change
-- No orphaned progress entries possible
-
-### 4. Fresh State on Configuration Change
-
-When the configuration changes:
-
-1. Old progress array is discarded
-2. New progress array is built from scratch
-3. All servers in new configuration get fresh entries
-4. No state carries over from previous configuration
 
 ## Benefits
 
@@ -304,41 +262,6 @@ If a server is removed and re-added multiple times:
 3. Delayed responses: Rejected if from old configuration
 4. Protection works across all cycles
 
-## Comparison with Other Approaches
-
-### vs. CallId Matching
-
-**canonical/raft advantages**:
-- Simpler: No per-request tracking
-- Less state: Uses existing configuration
-- Natural: Configuration is already needed
-
-**canonical/raft disadvantages**:
-- Cannot detect stale responses within same configuration
-- Coarser granularity (configuration-level vs request-level)
-
-### vs. Version Counter
-
-**canonical/raft advantages**:
-- No additional counters
-- No version management complexity
-- Leverages existing Raft concept (configuration)
-
-**canonical/raft disadvantages**:
-- Tied to configuration changes
-- Cannot detect staleness within configuration
-
-### vs. RPC Client ID
-
-**canonical/raft advantages**:
-- Framework-independent
-- No RPC-specific dependencies
-- Pure Raft-level solution
-
-**canonical/raft disadvantages**:
-- Less automatic than object lifecycle
-- Requires explicit validation code
-
 ## Impact Assessment
 
 ### Protection Effectiveness
@@ -386,13 +309,3 @@ canonical/raft's configuration-based approach is similar to:
 - Both reject responses from non-members
 
 The key difference is implementation language and style (C vs Erlang).
-
-### Design Philosophy
-
-The protection reflects C systems programming principles:
-
-- Explicit validation at boundaries
-- Single source of truth (configuration)
-- Defensive programming (NULL checks)
-- Clear error paths (early return)
-- Minimal abstraction overhead

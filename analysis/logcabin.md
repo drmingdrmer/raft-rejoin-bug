@@ -15,7 +15,7 @@ LogCabin is vulnerable to the replication session isolation bug due to **insuffi
 
 The response handler has epoch tracking but doesn't validate response freshness:
 
-**File**: `RaftConsensus.cc:2309-2371`
+File: [`RaftConsensus.cc:2309-2371`](https://github.com/logcabin/logcabin/blob/master/RaftConsensus.cc#L2309-L2371)
 
 ```cpp
 void RaftConsensus::handleAppendEntriesResponse(
@@ -80,7 +80,7 @@ This means:
 
 When a peer rejoins, it gets zero state but keeps the same epoch:
 
-**File**: `RaftConsensus.cc:727-738`
+File: [`RaftConsensus.cc:727-738`](https://github.com/logcabin/logcabin/blob/master/RaftConsensus.cc#L727-L738)
 
 ```cpp
 void RaftConsensus::addPeer(uint64_t serverId) {

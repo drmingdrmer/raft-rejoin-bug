@@ -117,29 +117,12 @@ T5       | Send new AppendEntries with callId=200   | Queue: [callId=200]
          | Normal replication continues             | Clean state
 ```
 
-## Key Design Principles
-
-1. **Framework-integrated**: Leverages brpc's built-in call ID mechanism
-2. **Per-request tracking**: Each request is individually tracked in the queue
-3. **Automatic cleanup**: RPC cancellation on replicator destruction
-4. **Zero false positives**: Only responses matching pending requests are accepted
-
 ## Benefits
 
 - **Robust**: Cannot be fooled by delayed responses
 - **Proven**: brpc is widely used in production systems
 - **No protocol changes**: Works at application level
 - **Per-request granularity**: Handles all edge cases
-
-## Comparison with Other Approaches
-
-| Approach | braft | Version Counter | Membership Check |
-|----------|-------|-----------------|------------------|
-| Granularity | Per-request | Per-session | Per-configuration |
-| Framework dependency | Yes (brpc) | No | No |
-| Extra state | Queue | Single int | None |
-| Edge cases | None | Overflow (rare) | Rapid changes |
-| Complexity | Medium | Low | Medium |
 
 ## References
 

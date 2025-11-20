@@ -15,7 +15,7 @@ NuRaft is protected against the replication session isolation bug through **RPC 
 
 When a peer sends an AppendEntries request, the RPC client pointer is captured in the request closure:
 
-**File**: `peer.cxx:31-84`
+File: [`peer.cxx:31-84`](https://github.com/ebay/NuRaft/blob/master/src/peer.cxx#L31-L84)
 
 ```cpp
 ptr<req_msg> req(cs_new<req_msg>(...)...);
@@ -35,7 +35,7 @@ The `my_rpc_client` variable captures the current RPC client object that will be
 
 When a response arrives, the implementation validates that the captured RPC client ID matches the current RPC client ID:
 
-**File**: `peer.cxx:119-143`
+File: [`peer.cxx:119-143`](https://github.com/ebay/NuRaft/blob/master/src/peer.cxx#L119-L143)
 
 ```cpp
 uint64_t cur_rpc_id = rpc_ ? rpc_->get_id() : 0;
@@ -89,24 +89,6 @@ T5       | Leader sends fresh AppendEntries(prev=0) |
          | Node C accepts (correct state)           |
          | Normal replication continues             | ✓ No corruption
 ```
-
-## Key Design Principles
-
-### 1. Implicit Session Isolation
-
-The RPC client object serves as an implicit session identifier. Each time a peer connection is re-established, a new RPC client with a unique ID is created. This provides automatic session isolation without requiring explicit session management in the Raft protocol.
-
-### 2. Closure-Based Validation
-
-By capturing the RPC client pointer in the request closure, the implementation creates a natural validation mechanism. The closure carries the "expected" RPC client ID, which can be compared against the "current" RPC client ID.
-
-### 3. Object Identity as Session Boundary
-
-The RPC client's lifetime serves as the session boundary. When a node is removed, the RPC client is destroyed. When it rejoins, a new RPC client with a fresh identity is created. This ensures responses from the old session cannot be accepted by the new session.
-
-### 4. Transparent Protection
-
-The protection mechanism works at the RPC layer, transparent to the Raft protocol logic. No changes to message formats or protocol semantics are required. The validation happens automatically for all RPC requests and responses.
 
 ## Benefits
 
@@ -222,12 +204,3 @@ NuRaft's RPC client ID approach is similar to:
 - **sofa-jraft**: Version counter per replicator
 
 The key difference is that NuRaft uses object identity (RPC client ID) rather than per-request IDs or version counters.
-
-### Design Philosophy
-
-The protection reflects NuRaft's design philosophy:
-
-- Leverage existing infrastructure (RPC framework)
-- Implicit rather than explicit session management
-- Framework-level protection
-- Clean abstraction boundaries
