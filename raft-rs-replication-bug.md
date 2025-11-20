@@ -1,40 +1,28 @@
 # Replication Progress Corruption in raft-rs During Membership Changes
 
-raft-rs, TiKV's Raft implementation, contains a bug in its replication progress tracking that occurs when nodes are removed and re-added within the same term. Delayed AppendEntries responses from previous membership configurations can corrupt the leader's view of a node's replication progress, causing infinite retry loops. While this bug does not compromise data safety, it causes operational problems including resource exhaustion and nodes that cannot catch up without manual intervention.
+> This article is part of the [Raft Rejoin Bug Survey](https://github.com/drmingdrmer/raft-rejoin-bug)
+
+raft-rs is TiKV's Raft implementation, and it has a bug in how it tracks replication progress. The problem shows up when a node gets removed and then re-added to the cluster within the same term. What happens is that delayed AppendEntries responses from the old membership configuration can corrupt the leader's progress tracking for that node, leading to infinite retry loops. The good news is that data safety isn't compromised, but it does create operational headaches—resource exhaustion and nodes that can't catch up without manual intervention.
 
 ## Raft Log Replication Basics
 
-In Raft, the leader replicates log entries to followers through AppendEntries RPC calls. The leader maintains a replication state machine for each follower, tracking which log entries have been successfully replicated.
+In Raft, the leader replicates log entries to followers through AppendEntries RPC calls, while maintaining a replication state machine for each follower to track replication progress.
 
 ### AppendEntries Request-Response Flow
 
-The leader sends AppendEntries requests containing:
-- `term`: The leader's current term
-- `prev_log_index`: Log index immediately before the new entries
-- `prev_log_term`: Term of the prev_log_index entry
-- `entries[]`: Log entries to replicate
-- `leader_commit`: Leader's commit index
-
-The follower responds with:
-- `term`: Follower's current term
-- `index`: The highest log index that was replicated
-- `success`: Whether the AppendEntries succeeded
+Here's how it works: The leader sends AppendEntries requests with the current `term`, the `prev_log_index` and `prev_log_term` pointing to the position just before the new entries, the `entries[]` array to replicate, and the leader's `leader_commit` index. The follower responds with its own `term`, the highest log `index` it replicated, and whether the operation succeeded.
 
 ### Progress Tracking
 
-The leader uses responses to track each follower's replication progress:
-- `matched`: The highest log index confirmed to be replicated on this follower
-- `next_idx`: The next log index to send to this follower
+The leader relies on these responses to track each follower's replication status. It uses `matched` to record the highest log index confirmed to be replicated on that follower, and `next_idx` to mark where to send next. When a successful response comes back with `index=N`, the leader updates `matched=N` and calculates `next_idx=N+1` for the next round.
 
-When a success response arrives with `index=N`, the leader updates `matched=N` and calculates `next_idx=N+1` for the next request.
-
-This tracking mechanism assumes that responses correspond to the current replication session. The bug we'll examine occurs when this assumption breaks.
+This tracking mechanism has an implicit assumption: responses correspond to the current replication session. The bug we're examining happens when this assumption breaks down.
 
 ## Problem Description
 
-After a node rejoins a cluster, the leader enters an infinite retry loop. The leader sends AppendEntries requests, the node rejects them, and the cycle repeats. CPU usage increases, network traffic spikes, and the node never catches up with the cluster state.
+When a node rejoins the cluster, something strange happens: the leader gets stuck in an infinite retry loop. It keeps sending AppendEntries requests, the node keeps rejecting them, and the cycle just repeats. You'll see CPU usage spike, network traffic increase, and that node never manages to catch up.
 
-The logs show continuous rejection messages that resemble data corruption—the node appears to be missing log entries. However, the actual cause is that the leader's progress tracking has been corrupted by a delayed AppendEntries response from a previous membership configuration.
+Looking at the logs, you'll see continuous rejection messages that look like data corruption—as if the node is missing log entries. But that's not what's really happening. The actual culprit is a delayed AppendEntries response from the old membership configuration that has corrupted the leader's progress tracking.
 
 ## raft-rs Progress Tracking
 
@@ -50,7 +38,7 @@ pub struct Progress {
 }
 ```
 
-The `matched` field tracks the highest log index that has been successfully replicated to this follower. When the leader receives a successful AppendEntries response, it updates this field:
+The `matched` field records the highest log index successfully replicated to this follower. Whenever the leader receives a successful AppendEntries response, it updates this field:
 
 ```rust
 // From raft-rs/src/tracker/progress.rs
@@ -64,11 +52,11 @@ pub fn maybe_update(&mut self, n: u64) -> bool {
 }
 ```
 
-When a node is removed from the cluster, its Progress record is deleted. When it rejoins, a new Progress record is created with `matched = 0`.
+Notice the update logic is quite simple: as long as the new index is higher than the current `matched`, it accepts the update. When a node gets removed from the cluster, its Progress record is deleted. When it rejoins, a brand new Progress record is created with `matched = 0`.
 
 ## Bug Reproduction Sequence
 
-The following sequence demonstrates how the bug occurs. All events happen within a single term (term=5), which is key to understanding why term-based validation fails.
+Let's walk through a concrete timeline to see how this bug unfolds. Pay special attention to the fact that all events happen within a single term (term=5)—this is key to understanding why term-based validation fails.
 
 ### Event Timeline
 
@@ -101,7 +89,7 @@ The following sequence demonstrates how the bug occurs. All events happen within
 
 ### Response Handling at T4
 
-At time T4, the delayed response from the old membership session arrives. The leader processes it as follows:
+At time T4, that response sent at T1 and delayed in the network finally arrives. Here's how the leader handles it:
 
 ```rust
 // From raft-rs/src/raft.rs
@@ -123,34 +111,35 @@ fn handle_append_response(&mut self, m: &Message) {
 }
 ```
 
-The leader finds a Progress record for node C (the new one from T3). Since the message's term matches the current term, it updates the progress with the stale index value.
+Here's where things go wrong: The leader does find a Progress record for node C, but it's the new one created at T3. Since the message's term matches the current term, it passes the term check in the [`step()` function](https://github.com/tikv/raft-rs/blob/master/src/raft.rs#L1346-L1478), and the leader updates progress with this stale index value.
 
 ## Root Cause Analysis
 
-The bug occurs because **membership changes in Raft don't require term changes**. A leader can remove and re-add a node within the same term. Membership changes are special log entries that get replicated like any other entry.
+The root of this bug is that **request-response messages lack replication session identification**. When node C gets removed at T2 and rejoins at T3, these should be two distinct replication sessions—but the leader has no way to distinguish between responses from requests sent at T1 versus responses from requests sent after T3.
 
-The Message structure in raft-rs only includes term information:
+Look at raft-rs's Message structure:
+
+File: [`proto/proto/eraftpb.proto:71-98`](https://github.com/tikv/raft-rs/blob/master/proto/proto/eraftpb.proto#L71-L98)
 
 ```protobuf
-// From raft-rs/proto/proto/eraftpb.proto
 message Message {
     MessageType msg_type = 1;
     uint64 to = 2;
     uint64 from = 3;
-    uint64 term = 4;        // Only term, no membership version!
+    uint64 term = 4;        // Only term, no session identifier!
     uint64 log_term = 5;
     uint64 index = 6;
     // ...
 }
 ```
 
-Without a way to distinguish which membership configuration a message belongs to, the leader can't tell if a response is from the current session or a previous one. The term check `if m.term == self.term` passes because both the old and new sessions happen in term 5.
+The Message only has a `from` field identifying the sending node, but the same node ID joining the cluster at different times should be treated as different replication sessions. The leader needs to distinguish: is this response from node C's first session or its second session? But the current Message structure provides no way to tell.
 
 ## Impact Analysis
 
 ### Infinite Retry Loop
 
-Once the leader incorrectly sets `matched=1`, it enters an infinite loop:
+Once the leader incorrectly sets `matched=1`, trouble begins. Here's what happens:
 
 ```rust
 // From raft-rs/src/tracker/progress.rs
@@ -166,38 +155,23 @@ pub fn maybe_decr_to(&mut self, rejected: u64, match_hint: u64, ...) -> bool {
 }
 ```
 
-The leader sends AppendEntries with `prev_log_index=1`, but node C doesn't have this entry (it's a fresh node with an empty log). Node C rejects the request. The leader tries to decrement `next_idx`, but since `rejected (1) == matched (1)`, it refuses to decrement. The leader sends the same request again, and the cycle continues forever.
+The leader sends AppendEntries with `prev_log_index=1`, but node C's log is empty—it doesn't have index 1. Node C rejects the request. The leader wants to decrement `next_idx` to retry an earlier position, but here's the problem: because `rejected (1) == matched (1)`, the decrement logic returns false and refuses to decrement. So the leader just sends the same request again, node C rejects it again, and this cycle continues forever.
 
 ### Operational Impact
 
-1. **Resource Exhaustion**: The continuous AppendEntries-rejection cycle consumes CPU and network bandwidth indefinitely.
-
-2. **Misleading Logs**: Operators see continuous rejection messages that look like data corruption:
-   ```
-   rejected msgApp [logterm: 5, index: 1] from leader
-   ```
-
-3. **False Alerts**: Monitoring systems detect high rejection rates and may page on-call engineers for a non-existent data corruption issue.
-
-4. **Manual Intervention Required**: The node won't recover without a restart or manual intervention, reducing cluster fault tolerance.
+This bug creates a series of operational problems. First, there's resource exhaustion: the continuous AppendEntries-rejection cycle keeps consuming CPU and network bandwidth. Second, operators looking at the logs see continuous rejection messages like `rejected msgApp [logterm: 5, index: 1] from leader`, which looks like data corruption at first glance. Monitoring systems will detect the high rejection rate and may page on-call engineers in the middle of the night to investigate a data loss problem that doesn't actually exist. Worst of all, the node can't recover on its own—you'll need to manually restart it or intervene, which reduces the cluster's overall fault tolerance.
 
 ## Why Data Remains Safe
 
-Despite the operational chaos, data integrity is preserved. Raft's safety properties ensure that even with corrupted progress tracking, the cluster won't lose committed data.
+Despite all the operational chaos, there's good news: data integrity remains intact. Raft's safety properties ensure that even with corrupted progress tracking, the cluster won't lose any committed data.
 
-The key is that commit index calculation still works correctly. Even if the leader thinks node C has `matched=1`, it calculates the commit index based on the actual majority:
-
-- Node A: matched=100
-- Node B: matched=100
-- Node C: matched=1 (incorrect, but doesn't matter)
-
-The majority (A and B) have matched=100, so the commit index is correctly calculated as 100. The safety properties of Raft's overlapping majorities ensure that any new leader will have all committed entries.
+The reason is that commit index calculation still works correctly. Even if the leader mistakenly thinks node C has `matched=1`, it calculates the commit index based on the actual majority. For example, node A has matched=100, node B has matched=100, and node C has matched=1 (which is wrong, but doesn't matter). The majority looks at A and B with matched=100, so the commit index is correctly calculated as 100. Combined with Raft's overlapping majorities property, any newly elected leader will necessarily have all committed entries, keeping data safe.
 
 ## Solutions: Three Approaches
 
 ### Solution 1: Add Membership Version (Recommended)
 
-Add a membership configuration version to messages:
+The most straightforward fix is to add a membership configuration version to messages:
 
 ```protobuf
 message Message {
@@ -222,11 +196,11 @@ fn handle_append_response(&mut self, m: &Message) {
 }
 ```
 
-This directly addresses the root cause by allowing the leader to distinguish messages from different membership configurations.
+This directly fixes the root cause—the leader can now tell which membership configuration a message comes from.
 
 ### Solution 2: Generation Counters
 
-Add a generation counter to Progress that increments each time a node rejoins:
+Another approach is to add a generation counter to Progress that increments each time a node rejoins:
 
 ```rust
 pub struct Progress {
@@ -237,7 +211,7 @@ pub struct Progress {
 }
 ```
 
-Include the generation in messages and validate it on responses. This is lighter weight than solution 1 but requires careful generation management.
+Include the generation in messages and validate it when responses arrive. This is lighter weight than solution 1, but you need to carefully manage the generation lifecycle.
 
 ### Solution 3: Stricter Log Validation
 
@@ -259,12 +233,12 @@ pub fn maybe_update(&mut self, n: u64, log_term: u64) -> bool {
 }
 ```
 
-This catches inconsistencies but requires additional log lookups and may have edge cases.
+This can catch inconsistencies, but it requires additional log lookups and may have edge cases.
 
 ## Summary
 
-This bug demonstrates that term-based validation alone is insufficient for ensuring message freshness when membership changes occur within the same term. Without explicit session isolation, delayed responses from previous membership configurations can corrupt progress tracking.
+This bug shows us that relying on term-based validation alone isn't enough to ensure message freshness when membership changes happen within the same term. Without explicit session isolation, delayed responses from old membership configurations can corrupt progress tracking.
 
-While the bug does not compromise data safety due to Raft's commit index calculation and overlapping majority guarantees, it creates operational problems. The symptoms resemble data corruption, potentially causing operations teams to investigate non-existent data loss issues.
+Fortunately, while this bug creates operational problems, it doesn't compromise data safety—thanks to Raft's commit index calculation and overlapping majority guarantees. The challenge is that the symptoms look like data corruption, which can send operations teams down the rabbit hole investigating a data loss problem that doesn't actually exist.
 
-Production Raft implementations should use explicit session management through membership versioning or generation counters to prevent this issue. The recommended solution is to add a membership_log_id field to messages, allowing the leader to distinguish responses from different membership configurations.
+For production Raft implementations, it's recommended to introduce explicit session management. You can do this through membership versioning or generation counters. The best approach is to add a membership_log_id field to messages, which lets the leader clearly distinguish responses from different membership configurations.
