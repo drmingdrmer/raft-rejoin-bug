@@ -1,8 +1,8 @@
 # Replication Progress Corruption in raft-rs During Membership Changes
 
-> This article is part of the [Raft Rejoin Bug Survey](https://github.com/drmingdrmer/raft-rejoin-bug)
-
 raft-rs is TiKV's Raft implementation, and it has a bug in how it tracks replication progress. The problem shows up when a node gets removed and then re-added to the cluster within the same term. What happens is that delayed AppendEntries responses from the old membership configuration can corrupt the leader's progress tracking for that node, leading to infinite retry loops. The good news is that data safety isn't compromised, but it does create operational headaches—resource exhaustion and nodes that can't catch up without manual intervention.
+
+> Complete analysis and survey of other Raft implementations can be found in the [Raft Rejoin Bug Survey](https://github.com/drmingdrmer/raft-rejoin-bug)
 
 ## Raft Log Replication Basics
 
@@ -16,13 +16,9 @@ Here's how it works: The leader sends AppendEntries requests with the current `t
 
 The leader relies on these responses to track each follower's replication status. It uses `matched` to record the highest log index confirmed to be replicated on that follower, and `next_idx` to mark where to send next. When a successful response comes back with `index=N`, the leader updates `matched=N` and calculates `next_idx=N+1` for the next round.
 
-This tracking mechanism has an implicit assumption: responses correspond to the current replication session. The bug we're examining happens when this assumption breaks down.
+This tracking mechanism has an implicit assumption: responses correspond to the current replication session.
 
-## Problem Description
-
-When a node rejoins the cluster, something strange happens: the leader gets stuck in an infinite retry loop. It keeps sending AppendEntries requests, the node keeps rejecting them, and the cycle just repeats. You'll see CPU usage spike, network traffic increase, and that node never manages to catch up.
-
-Looking at the logs, you'll see continuous rejection messages that look like data corruption—as if the node is missing log entries. But that's not what's really happening. The actual culprit is a delayed AppendEntries response from the old membership configuration that has corrupted the leader's progress tracking.
+If this assumption isn't handled properly, when a node rejoins the cluster, the leader can get stuck in an infinite retry loop. It keeps sending AppendEntries requests, the node keeps rejecting them, and the cycle repeats endlessly while that node never manages to catch up with the cluster.
 
 ## raft-rs Progress Tracking
 
@@ -167,7 +163,7 @@ Despite all the operational chaos, there's good news: data integrity remains int
 
 The reason is that commit index calculation still works correctly. Even if the leader mistakenly thinks node C has `matched=1`, it calculates the commit index based on the actual majority. For example, node A has matched=100, node B has matched=100, and node C has matched=1 (which is wrong, but doesn't matter). The majority looks at A and B with matched=100, so the commit index is correctly calculated as 100. Combined with Raft's overlapping majorities property, any newly elected leader will necessarily have all committed entries, keeping data safe.
 
-## Solutions: Three Approaches
+## Solutions
 
 ### Solution 1: Add Membership Version (Recommended)
 
@@ -213,32 +209,12 @@ pub struct Progress {
 
 Include the generation in messages and validate it when responses arrive. This is lighter weight than solution 1, but you need to carefully manage the generation lifecycle.
 
-### Solution 3: Stricter Log Validation
-
-When updating progress, verify that the response's log term matches the local log:
-
-```rust
-pub fn maybe_update(&mut self, n: u64, log_term: u64) -> bool {
-    // Verify log term matches our local log
-    if self.raft_log.term(n) != log_term {
-        return false;  // Reject stale update
-    }
-
-    let need_update = self.matched < n;
-    if need_update {
-        self.matched = n;
-        self.resume();
-    }
-    need_update
-}
-```
-
-This can catch inconsistencies, but it requires additional log lookups and may have edge cases.
-
 ## Summary
 
-This bug shows us that relying on term-based validation alone isn't enough to ensure message freshness when membership changes happen within the same term. Without explicit session isolation, delayed responses from old membership configurations can corrupt progress tracking.
+This bug shows us that when membership changes happen within the same term, relying on term-based validation alone isn't enough to ensure message freshness. Without explicit session isolation, delayed responses from old membership configurations can corrupt progress tracking.
 
-Fortunately, while this bug creates operational problems, it doesn't compromise data safety—thanks to Raft's commit index calculation and overlapping majority guarantees. The challenge is that the symptoms look like data corruption, which can send operations teams down the rabbit hole investigating a data loss problem that doesn't actually exist.
+Fortunately, because Raft's commit index calculation and overlapping quorum mechanisms provide strong guarantees, this bug doesn't compromise data safety. The main impact is operational—the symptoms look like data corruption, which can send operations teams down the rabbit hole investigating a data loss problem that doesn't actually exist.
 
-For production Raft implementations, it's recommended to introduce explicit session management. You can do this through membership versioning or generation counters. The best approach is to add a membership_log_id field to messages, which lets the leader clearly distinguish responses from different membership configurations.
+For production Raft implementations, it's recommended to introduce explicit session management mechanisms. This can be achieved through membership versioning or generation counters. The most recommended approach is to add a membership_log_id field to messages, which lets the leader clearly distinguish which membership configuration a response comes from.
+
+> Complete analysis and survey of other Raft implementations can be found in the [Raft Rejoin Bug Survey](https://github.com/drmingdrmer/raft-rejoin-bug)
