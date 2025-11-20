@@ -96,7 +96,7 @@ T5       | Leader sends AppendEntries(prev=50)      |
 
 ## Recommended Solutions
 
-### Solution 1: Add Version Counter (Recommended)
+### Solution: Add Version Counter (Recommended)
 
 ```rust
 pub struct Progress {
@@ -132,62 +132,6 @@ impl Progress {
 }
 ```
 
-### Solution 2: Request ID Tracking
-
-```rust
-pub struct Progress {
-    pub matched: u64,
-    pub next_idx: u64,
-    pub state: ProgressState,
-    pub inflight_requests: HashMap<u64, RequestInfo>,  // request_id -> info
-    next_request_id: u64,
-    // ...
-}
-
-struct RequestInfo {
-    log_index: u64,
-    sent_at: Instant,
-}
-
-impl Progress {
-    pub fn send_append(&mut self, index: u64) -> u64 {
-        let req_id = self.next_request_id;
-        self.next_request_id += 1;
-        self.inflight_requests.insert(req_id, RequestInfo {
-            log_index: index,
-            sent_at: Instant::now(),
-        });
-        req_id
-    }
-
-    pub fn handle_response(&mut self, request_id: u64, success: bool, index: u64) -> bool {
-        // Validate request ID
-        if let Some(req_info) = self.inflight_requests.remove(&request_id) {
-            if success {
-                self.maybe_update(index);
-            }
-            true
-        } else {
-            // Stale response
-            false
-        }
-    }
-}
-```
-
-### Solution 3: Add Session ID to Message Protocol
-
-```protobuf
-message Message {
-    MessageType msg_type = 1;
-    uint64 to = 2;
-    uint64 from = 3;
-    uint64 term = 4;
-    uint64 session_id = 10;  // Add session identifier
-    // ...
-}
-```
-
 This requires protocol changes and coordination with all raft-rs users.
 
 ## Impact Assessment
@@ -206,7 +150,6 @@ This requires protocol changes and coordination with all raft-rs users.
 
 ## References
 
-- Progress struct: `src/tracker/progress.rs:8-56`
-- Progress update: `src/tracker/progress.rs:136-148`
-- Message protocol: `proto/proto/eraftpb.proto:71-98`
-- Technical article: [raft-rs-replication-bug.md](../raft-rs-replication-bug.md)
+- Progress struct: [`src/tracker/progress.rs:8-56`](https://github.com/tikv/raft-rs/blob/master/src/tracker/progress.rs#L8-L56)
+- Progress update: [`src/tracker/progress.rs:136-148`](https://github.com/tikv/raft-rs/blob/master/src/tracker/progress.rs#L136-L148)
+- Message protocol: [`proto/proto/eraftpb.proto:71-98`](https://github.com/tikv/raft-rs/blob/master/proto/proto/eraftpb.proto#L71-L98)
